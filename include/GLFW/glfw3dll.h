@@ -1,0 +1,1 @@
+#define GLFW_DLL
