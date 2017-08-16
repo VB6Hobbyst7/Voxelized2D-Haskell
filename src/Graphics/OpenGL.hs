@@ -14,6 +14,24 @@ import Math.Linear.Mat
 import qualified Math.Linear.Mat as Mat
 import qualified Memory.MemBlock as Mem
 import Math.Nat
+import Data.Monoid ((<>))
+import Foreign.Ptr(FunPtr, freeHaskellFunPtr)
+
+type GLFWkeyfun = Ptr () -> CInt -> CInt -> CInt -> CInt -> IO ()
+type GLFWframebuffersizefun = Ptr () -> CInt -> CInt -> IO()
+type GLFWerrorfun = CInt -> CString -> IO ()
+
+-- a "wrapper" import gives a factory for converting a Haskell function to a foreign function pointer
+foreign import ccall "wrapper"
+  wrapFrameBufferSizeCallbackFun :: GLFWframebuffersizefun -> IO (FunPtr GLFWframebuffersizefun)
+
+foreign import ccall "wrapper"
+  wrapKeyCallbackFun :: GLFWkeyfun -> IO (FunPtr GLFWkeyfun)
+
+foreign import ccall "wrapper"
+  wrapErrorCallbackFun :: GLFWerrorfun -> IO (FunPtr GLFWerrorfun)
+
+C.context (C.baseCtx <> C.funCtx)
 
 --C.include "<glfw3dll.h>"
 C.include "<math.h>"
@@ -37,8 +55,71 @@ c_GL_TRIANGLES = 4 :: Int
 c_GL_LINES = 1 :: Int
 c_GL_CURRENT_PROGRAM = 35725 :: Int
 
+
+
+c_GLFW_KEY_SPACE              = 32 :: Int
+c_GLFW_KEY_APOSTROPHE         = 39 :: Int
+c_GLFW_KEY_COMMA              = 44 :: Int
+c_GLFW_KEY_MINUS              = 45 :: Int
+c_GLFW_KEY_PERIOD             = 46 :: Int
+c_GLFW_KEY_SLASH              = 47 :: Int
+c_GLFW_KEY_0                  = 48 :: Int
+c_GLFW_KEY_1                  = 49 :: Int
+c_GLFW_KEY_2                  = 50 :: Int
+c_GLFW_KEY_3                  = 51 :: Int
+c_GLFW_KEY_4                  = 52 :: Int
+c_GLFW_KEY_5                  = 53 :: Int
+c_GLFW_KEY_6                  = 54 :: Int
+c_GLFW_KEY_7                  = 55 :: Int
+c_GLFW_KEY_8                  = 56 :: Int
+c_GLFW_KEY_9                  = 57 :: Int
+c_GLFW_KEY_SEMICOLON          = 59 :: Int
+c_GLFW_KEY_EQUAL              = 61 :: Int
+c_GLFW_KEY_A                  = 65 :: Int
+c_GLFW_KEY_B                  = 66 :: Int
+c_GLFW_KEY_C                  = 67 :: Int
+c_GLFW_KEY_D                  = 68 :: Int
+c_GLFW_KEY_E                  = 69 :: Int
+c_GLFW_KEY_F                  = 70 :: Int
+c_GLFW_KEY_G                  = 71 :: Int
+c_GLFW_KEY_H                  = 72 :: Int
+c_GLFW_KEY_I                  = 73 :: Int
+c_GLFW_KEY_J                  = 74 :: Int
+c_GLFW_KEY_K                  = 75 :: Int
+c_GLFW_KEY_L                  = 76 :: Int
+c_GLFW_KEY_M                  = 77 :: Int
+c_GLFW_KEY_N                  = 78 :: Int
+c_GLFW_KEY_O                  = 79 :: Int
+c_GLFW_KEY_P                  = 80 :: Int
+c_GLFW_KEY_Q                  = 81 :: Int
+c_GLFW_KEY_R                  = 82 :: Int
+c_GLFW_KEY_S                  = 83 :: Int
+c_GLFW_KEY_T                  = 84 :: Int
+c_GLFW_KEY_U                  = 85 :: Int
+c_GLFW_KEY_V                  = 86 :: Int
+c_GLFW_KEY_W                  = 87 :: Int
+c_GLFW_KEY_X                  = 88 :: Int
+c_GLFW_KEY_Y                  = 89 :: Int
+c_GLFW_KEY_Z                  = 90 :: Int
+c_GLFW_KEY_LEFT_BRACKET       = 91 :: Int
+c_GLFW_KEY_BACKSLASH          = 92 :: Int
+c_GLFW_KEY_RIGHT_BRACKET      = 93 :: Int
+c_GLFW_KEY_GRAVE_ACCENT       = 96 :: Int
+c_GLFW_KEY_WORLD_1            = 161 :: Int
+c_GLFW_KEY_WORLD_2            = 162 :: Int
+
+
+c_GLFW_KEY_ESCAPE             = 256 :: Int
+
 glfwInit :: IO Int
 glfwInit = fromIntegral <$> [C.exp|int{glfwInit()}|]
+
+glfwSetErrorCallback :: GLFWerrorfun -> IO (Ptr ())
+glfwSetErrorCallback callback = do
+  wrapped <- wrapErrorCallbackFun callback
+  let ptr = castFunPtrToPtr wrapped :: Ptr ()
+  [C.exp|void*{ glfwSetErrorCallback ( $(void* ptr) ) }|]
+
 
 glfwCreateWindow :: Int -> Int -> String -> IO (Ptr ())
 glfwCreateWindow width height name = let
@@ -56,6 +137,28 @@ glfwCreateWindow width height name = let
             let !ret = [C.exp|void*{glfwCreateWindow($(int w), $(int h), $(char* n), NULL, NULL)}|]
             free n
             ret
+
+
+glfwSetWindowShouldClose :: Ptr () -> Bool -> IO ()
+glfwSetWindowShouldClose w should = do
+  let c = fromIntegral (if should then c_GLFW_TRUE else c_GLFW_FALSE) :: CChar
+  [C.exp|void{ glfwSetWindowShouldClose ( $(void* w), $(char c) )  }|]
+
+--returns a FunPtr that should be freed after deinitialization of OpenGL
+glfwSetFramebufferSizeCallback :: Ptr () -> GLFWframebuffersizefun -> IO (FunPtr GLFWframebuffersizefun)
+glfwSetFramebufferSizeCallback window callback = do
+  w <- wrapFrameBufferSizeCallbackFun callback --TODO needs manual freeing
+  let w2 = castFunPtrToPtr w --TODO this cast is pretty bad
+  [C.exp|void{ glfwSetFramebufferSizeCallback ( $(void* window),  $(void* w2) )  }|]
+  pure w
+
+--returns a FunPtr that should be freed after deinitialization of OpenGL
+glfwSetKeyCallback :: Ptr () -> GLFWkeyfun -> IO (FunPtr GLFWkeyfun)
+glfwSetKeyCallback window callback = do
+  w <- wrapKeyCallbackFun callback --TODO needs manual freeing
+  let w2 = castFunPtrToPtr w --TODO this cast is pretty bad
+  [C.exp|void{ glfwSetKeyCallback ( $(void* window),  $(void* w2) )  }|]
+  pure w
 
 glfwTerminate :: IO ()
 glfwTerminate = [C.exp|void{glfwTerminate()}|]

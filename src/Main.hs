@@ -30,26 +30,47 @@ import Graphics.Shader.ShaderUtils
 import qualified Graphics.Shader.ShaderUtils as SU
 import qualified Memory.MemBlock as Mem
 import Graphics.Render.RenderVertFrag
-
+import qualified Data.Array.IO as Ar
+import Data.IORef
+import System.IO.Unsafe
 
 name = "Haskell-voxelized2D"
-width = 400 :: Int
-height = 400 :: Int
+
+
+data WindowInfo = WindowInfo{windowId :: Ptr (), windowWidth :: Int, windowHeight :: Int}
+
+startingWidth = 400 :: Int
+startingHeight = 400 :: Int
+
+--global IO variable, worst thing ever. It's ok I swear, compiler !
+windowInfo :: IORef WindowInfo
+{-# NOINLINE windowInfo #-}
+windowInfo = unsafePerformIO (newIORef $ WindowInfo nullPtr startingWidth startingHeight)
 
 shadersDir = "resources" ++ [pathSeparator] ++ "shaders" ++ [pathSeparator]
+
+errorCallback :: CInt -> CString -> IO ()
+errorCallback errcode cstr = do
+  str <- peekCString cstr
+  println $ "GLFW3 failed with error code : " ++ show errcode ++ ", description " ++ str
+
 
 initGL = do
   glfwOk <- glfwInit
 
+  glfwSetErrorCallback errorCallback
+
   if glfwOk == c_GLFW_TRUE then do
     println "GLFW3 - done"
-    w <- glfwCreateWindow width height name
+    w <- glfwCreateWindow startingWidth startingHeight name
     glfwMakeContextCurrent w
 
     gladOk <- gladInit
     if gladOk == c_GLFW_TRUE then do
       println "GLAD - done"
-      return w
+      let info = WindowInfo w startingWidth startingHeight
+      writeIORef windowInfo info
+      return info
     else
       error "failed to initialize GLAD"
   else
@@ -79,50 +100,83 @@ loadShaders = do
 
   pure res
 
+
+frameBufferSizeCallback :: GLFWframebuffersizefun
+frameBufferSizeCallback w width height = do
+  glViewport 0 0 (fromIntegral width) (fromIntegral height)
+  writeIORef windowInfo $ WindowInfo w (fromIntegral width) (fromIntegral height)
+
+keyCallback :: GLFWkeyfun
+keyCallback w key scancode action mods =
+
+  if fromIntegral key == c_GLFW_KEY_ESCAPE then
+    glfwSetWindowShouldClose w True
+
+  else
+    pure ()
+
+
+run :: IO ()
+run = do
+  !ret <- initGL
+
+  let w = ret |> windowId
+
+  ptrCallbackFBS <- glfwSetFramebufferSizeCallback w frameBufferSizeCallback
+  ptrCallbackK <- glfwSetKeyCallback w keyCallback
+
+  shaders <- loadShaders
+
+  let shader = (HashMap.!)  shaders "color"
+  let i = SU.id shader
+  glUseProgram i
+
+  idP <- glGetUniformLocation i "P"
+  idV <- glGetUniformLocation i "V"
+
+  setMat4 idP (identity n4) False
+  setMat4 idV (identity n4) False
+
+  (dat, render) <- renderVertFragDefault c_GL_TRIANGLES vertexSizeColor setAttributePointersColor "color"
+  dat <- addTriangle dat (Triangle ( vec3 (-1) (-1) 0 ) ( vec3 1 (-1) 0 ) (vec3 0 1 0) )    (vec3 1 1 1)
+  (constr, dat) <- construct render dat
+
+
+
+
+  let shouldNotClose w = (== c_GLFW_FALSE) <$> glfwWindowShouldClose w
+
+  while shouldNotClose w $ \_ -> do
+       glClear c_GL_COLOR_BUFFER_BIT
+       glClearColor 1 0 0 1
+
+       draw render dat
+
+       glfwSwapBuffers w
+       glfwPollEvents
+       return w
+
+
+  glfwTerminate
+
+  freeHaskellFunPtr ptrCallbackFBS
+  freeHaskellFunPtr ptrCallbackK
+
+
 main :: IO ()
 main = do
-    !w <- initGL
-    shaders <- loadShaders
+  run
 
-    --glViewport 0 0 400 400
-
-    let shader = (HashMap.!)  shaders "color"
-    let i = SU.id shader
-    glUseProgram i
-
-    idP <- glGetUniformLocation i "P"
-    idV <- glGetUniformLocation i "V"
-
-    println $ "loc " ++ show idP
-    println $ "loc " ++ show idV
-
-    setMat4 idP (identity n4) False
-    setMat4 idV (identity n4) False
+testFun :: IO ()
+testFun = do
+  let size = 15
+  arr <- Ar.newArray (0, size - 1) 0 :: IO (Ar.IOArray Int Int)
+  for' 0 (< size) (+ 1) $ \i -> Ar.writeArray arr i (size - i)
+  !_ <- facSort arr
 
 
-    (dat, render) <- renderVertFragDefault c_GL_TRIANGLES vertexSizeColor setAttributePointersColor "color"
+  for' 0 (< size) (+ 1) $ \ i -> do
+    el <- Ar.readArray arr i
+    println $ show el
 
-    dat <- addTriangle dat (Triangle ( vec3 (-1) (-1) 0 ) ( vec3 1 (-1) 0 ) (vec3 0 1 0) )    (vec3 1 1 1)
-
-    (constr, dat) <- construct render dat
-
-    println $ show (Mem.stored $ vertexPool dat)
-    println $ show (Mem.stored $ indexPool dat)
-    println $ show constr
-
-
-
-    let shouldNotClose w = (== c_GLFW_FALSE) <$> glfwWindowShouldClose w
-
-    while shouldNotClose w $ \_ -> do
-         glClear c_GL_COLOR_BUFFER_BIT
-         glClearColor 1 0 0 1
-
-         draw render dat
-
-         glfwSwapBuffers w
-         glfwPollEvents
-         return w
-
-
-    glfwTerminate
+  pure ()

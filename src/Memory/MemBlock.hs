@@ -15,7 +15,7 @@ import qualified Language.C.Inline.Unsafe as UC
 import Common
 
 --MemBlock sizeOfAllocatedMemoryDividedBySizeOfOneElement pointerToAllocatedMemory, actuallyStoredAmountOfElements
-data (Storable a) => MemBlock a = MemBlock {size :: Int, ptr :: Ptr a, stored :: Int}
+data MemBlock a = MemBlock {size :: Int, ptr :: Ptr a, stored :: Int}
 
 
 new :: (Storable a) => Int -> IO (MemBlock a)
