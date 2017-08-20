@@ -17,6 +17,7 @@ import Math.Nat
 import Data.Monoid ((<>))
 import Foreign.Ptr(FunPtr, freeHaskellFunPtr)
 
+type GLFWmousebuttonfun = Ptr () -> CInt -> CInt -> CInt -> IO ()
 type GLFWkeyfun = Ptr () -> CInt -> CInt -> CInt -> CInt -> IO ()
 type GLFWframebuffersizefun = Ptr () -> CInt -> CInt -> IO()
 type GLFWerrorfun = CInt -> CString -> IO ()
@@ -27,6 +28,9 @@ foreign import ccall "wrapper"
 
 foreign import ccall "wrapper"
   wrapKeyCallbackFun :: GLFWkeyfun -> IO (FunPtr GLFWkeyfun)
+
+foreign import ccall "wrapper"
+  wrapMouseCallbackFun :: GLFWmousebuttonfun -> IO (FunPtr GLFWmousebuttonfun)
 
 foreign import ccall "wrapper"
   wrapErrorCallbackFun :: GLFWerrorfun -> IO (FunPtr GLFWerrorfun)
@@ -158,6 +162,13 @@ glfwSetKeyCallback window callback = do
   w <- wrapKeyCallbackFun callback --TODO needs manual freeing
   let w2 = castFunPtrToPtr w --TODO this cast is pretty bad
   [C.exp|void{ glfwSetKeyCallback ( $(void* window),  $(void* w2) )  }|]
+  pure w
+
+glfwSetMouseButtonCallback :: Ptr () -> GLFWmousebuttonfun -> IO (FunPtr GLFWmousebuttonfun)
+glfwSetMouseButtonCallback window callback = do
+  w <- wrapMouseCallbackFun callback --TODO needs manual freeing
+  let w2 = castFunPtrToPtr w --TODO this cast is pretty bad
+  [C.exp|void{ glfwSetMouseButtonCallback ( $(void* window),  $(void* w2) )  }|]
   pure w
 
 glfwTerminate :: IO ()

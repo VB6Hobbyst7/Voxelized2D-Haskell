@@ -18,19 +18,36 @@ int :: Int -> Int
 int a = a
 
 
-for :: a -> (a -> Bool) -> (a -> a) -> b -> (a -> b -> IO b ) -> IO b
+
+--experimental
+for :: a -> (a -> Bool) -> (a -> a) -> b -> (a -> b -> IO b ) -> IO b --functional for loop, processing some value at each step, returning the last one
 for val pred step initial body
     | pred val = do
         res <- body val initial
         for (step val) pred step res body
     | otherwise = pure initial
 
-for' :: a -> (a -> Bool) -> (a -> a) -> (a -> IO b ) -> IO ()
-for' val pred step body
-    | pred val = do
-        res <- body val
-        for' (step val) pred step body
-    | otherwise = pure ()
+--with IO condition
+cfor :: Int -> IO (Int -> Bool) -> (Int -> Int) -> (Int -> IO b ) -> IO () --imperative for loop, just like in C !
+cfor val pred step body = do
+    pr <- pred
+    if pr val then  do
+        body val
+        cfor (step val) pred step body
+    else pure ()
+
+
+while :: (a -> IO Bool) -> a -> (a -> IO a) -> IO () --functional while loop, same as functional for loop
+while predicate x func = do
+      ok <- predicate x
+      if ok
+          then
+              do
+                    y <- func x
+                    while predicate y func
+          else
+              return ()
+------------------
 
 timed :: (Integer -> String) -> IO a -> IO a
 timed howToRender op = do
@@ -42,16 +59,6 @@ timed howToRender op = do
 
       pure res
 
-while :: (a -> IO Bool) -> a -> (a -> IO a) -> IO a
-while predicate x func = do
-      ok <- predicate x
-      if ok
-          then
-              do
-                    y <- func x
-                    while predicate y func
-          else
-              return x
 
 swap :: IOArray Int a -> Int -> Int -> IO ()
 swap arr i j = do
@@ -68,8 +75,8 @@ removeDuplicates = Data.List.foldl (\seen x -> if x `elem` seen
 facSort :: IOArray Int Int -> IO ()
 facSort arr = do
   len <- (+ 1) . snd <$> getBounds arr
-  for' 0 (< len - 1) (+ 1) $ \i ->
-    for' (i + 1) (< len) (+ 1) $ \j -> do
+  cfor 0 ( (<) <$> pure len ) (+ 1) $ \i ->
+    cfor (i + 1) ( (<) <$> pure len ) (+ 1) $ \j -> do
       this <- readArray arr i
       next <- readArray arr j
       if this > next

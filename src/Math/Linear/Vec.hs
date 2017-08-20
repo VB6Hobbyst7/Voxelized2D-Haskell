@@ -10,6 +10,15 @@ data  Vec :: Nat -> * -> * where   --same as : data List (n :: Nat) a where ...
   Nil :: Vec Zero a
   (:>) :: a -> Vec n a -> Vec (Succ n) a
 
+
+type Vec2 a = Vec N2 a
+type Vec3 a = Vec N3 a
+type Vec4 a = Vec N4 a
+
+type Vec2F = Vec2 Float
+type Vec3F = Vec3 Float
+type Vec4F = Vec4 Float
+
 fullVec :: SNat n -> a -> Vec n a
 fullVec (S n) val = val :> fullVec n val
 fullVec Z _ = Nil
