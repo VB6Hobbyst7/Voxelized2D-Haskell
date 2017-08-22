@@ -42,20 +42,40 @@ import qualified Pack.CorePack as CorePack
 import qualified Memory.ArrayBuffer as ArrayBuffer
 import Memory.ArrayBuffer (ArrayBuffer)
 import Data.Maybe
+import Data.Global
 
 name = "Haskell-Voxelized2D"
 
 
---global IO variables, worst thing ever. No more
-windowInfo :: IORef WindowInfo
-{-# NOINLINE windowInfo #-}
-windowInfo = unsafePerformIO (newIORef $ WindowInfo nullPtr 0 0) --uninitialized
+declareIORef "windowInfo"
+  [t|WindowInfo|]
+  [e|WindowInfo nullPtr 0 0|] --uninitialized
 
-packData :: IORef (Maybe PackData) --global reference to fully mutable PackData, should be (Just data) after initialization
+declareIORef "packData"
+  [t|Maybe PackData|]
+  [e|Nothing|]
+
+declareIORef "errorCallbackPtr"
+  [t|FunPtr GLFWerrorfun|]
+  [e|nullFunPtr|]
+
+declareIORef "frameBufferSizeCallbackPtr"
+  [t|FunPtr GLFWframebuffersizefun|]
+  [e|nullFunPtr|]
+
+declareIORef "keyCallbackPtr"             --TODO don't hold these pointers like that, probably add them to some auto-cleaning facility ;)
+  [t|FunPtr GLFWkeyfun|]
+  [e|nullFunPtr|]
+
+declareIORef "mouseCallbackPtr"
+  [t|FunPtr GLFWmousebuttonfun|]
+  [e|nullFunPtr|]
+
+{-packData :: IORef (Maybe PackData) --global reference to fully mutable PackData, should be (Just data) after initialization
 {-# NOINLINE packData #-}
 packData = unsafePerformIO (newIORef Nothing)
 
-errorCallbackPtr :: IORef (FunPtr GLFWerrorfun) --TODO don't hold these pointers like that, probably add them to some auto-cleaning facility ;)
+errorCallbackPtr :: IORef (FunPtr GLFWerrorfun)
 {-# NOINLINE errorCallbackPtr #-}
 errorCallbackPtr = unsafePerformIO (newIORef nullFunPtr)
 
@@ -69,7 +89,7 @@ keyCallbackPtr = unsafePerformIO (newIORef nullFunPtr)
 
 mouseCallbackPtr :: IORef (FunPtr GLFWmousebuttonfun)
 {-# NOINLINE mouseCallbackPtr #-}
-mouseCallbackPtr = unsafePerformIO (newIORef nullFunPtr)
+mouseCallbackPtr = unsafePerformIO (newIORef nullFunPtr)-}
 
 --------------------------------------------------------------------------
 

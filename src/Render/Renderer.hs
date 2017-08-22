@@ -29,6 +29,8 @@ sysDraw windowInfo shaders = do
 
 drawUI :: WindowInfo -> HashTable String Shader -> IO ()
 drawUI windowInfo shaders = do
+
+  --lifetime : one draw
   onetime <- readIORef Reg.lifetimeOneDrawRenderers
   H.mapM_ (\(_,val) -> do -- == foreach do
     let render = fst val
@@ -66,3 +68,40 @@ drawUI windowInfo shaders = do
 
   newTable <- H.new
   writeIORef Reg.lifetimeOneDrawRenderers newTable --reset the table after rendering
+
+  --lifetime : manual
+
+  manual <- readIORef Reg.lifetimeManualRenderers
+  H.mapM_ (\(_,val) -> do -- == foreach do
+    let render = fst val
+    name <- render.>shaderName
+    (Just shader) <- (H.lookup) shaders name
+    shader.>SU.enable
+
+    let provider = snd val
+    if isJust (Reg.applyShaderData provider) then do
+      let (Just applySData) = Reg.applyShaderData provider
+      applySData shader windowInfo
+    else
+      pure ()
+
+    if isJust (Reg.applyPreRenderState provider) then do
+      let (Just applyPreState) = Reg.applyPreRenderState provider
+      applyPreState
+    else
+      pure ()
+
+
+    --render.>construct          construction is on user's side
+    render.>draw
+    --render.>deconstruct        same for deconstruction
+
+    if isJust (Reg.applyPostRenderState provider) then do
+      let (Just applyPostState) = Reg.applyPostRenderState provider
+      applyPostState
+    else
+      pure ()
+
+    SU.disable shader
+
+    ) manual

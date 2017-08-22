@@ -15,6 +15,8 @@ import Math.Linear.Mat
 import Math.Nat
 import Graphics.Render.RenderVertFrag as RVF
 import Graphics.Shader.ShaderUtils as SU
+import Data.Global
+import Data.IORef
 
 name = "CorePack"
 version = "0.0.1"
@@ -29,17 +31,11 @@ mouseCallback w button action mods = do
 
 updateCallback :: WindowInfo -> IO ()
 updateCallback windowInfo = do
-
-  let triangle = Triangle (vec3 (-1) 0 0) (vec3 1 0 0) (vec3 0 1 0)
-  (dat, renderer) <- RVF.renderVertFragDefault (pure c_GL_TRIANGLES) RVF.vertexSizeColor setAttributePointersColor (pure "color")
-  RVF.addTriangle dat triangle (vec3 1 1 0)
-
-  (Registry.renderer.>Registry.push) Registry.RenderLifetimeOneDraw Registry.RenderTransformationNone renderer $
-    Just $ Registry.RenderDataProvider (Just $ \ shader _ -> do
-      (shader.>SU.setMat4) "V" (identity n4) False
-      (shader.>SU.setMat4) "P" (identity n4) False
-    ) Nothing Nothing
   pure ()
+
+declareIORef "renderer"        --global mutable state ! Good way !!
+  [t| Maybe RenderVertFrag |]
+  [e| Nothing  |]
 
 init reg = do
 
@@ -47,10 +43,27 @@ init reg = do
   Registry.addMouseCallback reg mouseCallback
   Registry.addUpdateCallback reg updateCallback
 
+  let triangle = Triangle (vec3 (-1) 0 0) (vec3 1 0 0) (vec3 0 1 0)
+  (dat, _renderer) <- RVF.renderVertFragDefault (pure c_GL_TRIANGLES) RVF.vertexSizeColor setAttributePointersColor (pure "color")
+  writeIORef renderer (Just _renderer)
+  RVF.addTriangle dat triangle (vec3 1 1 0)
+
+  _renderer.>RVF.construct
+
+  (Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _renderer $
+    Just $ Registry.RenderDataProvider (Just $ \ shader _ -> do
+      (shader.>SU.setMat4) "V" (identity n4) False
+      (shader.>SU.setMat4) "P" (identity n4) False
+    ) Nothing Nothing
+
+
 
   println "core pack init !"
 
 deinit reg = do
+
+  (renderer.>readIORef) >>= (\(Just x) -> do x.>RVF.deconstruct;x.>RVF.free)
+
   println "core pack deinit !"
 
 pack = Registry.Pack name version init deinit
