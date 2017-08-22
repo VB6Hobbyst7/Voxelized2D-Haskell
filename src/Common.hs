@@ -1,11 +1,13 @@
 {-# LANGUAGE Strict #-}
 
 module Common where
-
+import qualified Data.HashTable.IO as H
 
 import Timer
 import Data.List
 import Data.Array.IO
+
+type HashTable k v = H.BasicHashTable k v --hashtable from hashtables
 
 infixl 0 |>
 (|>) :: a -> (a -> b) -> b
@@ -17,7 +19,10 @@ println = putStrLn
 int :: Int -> Int
 int a = a
 
-
+--this operator is meant to be used as a record's field accessor
+infixl 8 .>
+(.>) :: a -> (a -> b) -> b
+(.>) record field = field record
 
 --experimental
 for :: a -> (a -> Bool) -> (a -> a) -> b -> (a -> b -> IO b ) -> IO b --functional for loop, processing some value at each step, returning the last one

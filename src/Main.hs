@@ -5,7 +5,7 @@ import qualified Prelude
 import Data.Ratio
 import Control.Monad
 import System.Environment.FindBin
-import qualified Data.HashMap as HashMap
+import qualified Data.HashTable.IO as H
 
 import Foreign
 import Foreign.C.Types
@@ -106,7 +106,7 @@ initGL = do
   else
     error "failed to initialize GLFW3"
 
-loadShaders :: IO (HashMap.Map String Shader )
+loadShaders :: IO (HashTable String Shader)
 loadShaders = do
   exedir <- getProgPath
   let fullDir = exedir ++ [pathSeparator] ++ shadersDir
@@ -118,13 +118,14 @@ loadShaders = do
   mapM_ println names
   let paired = map (\name -> let prefix = fullDir ++ name in (prefix ++ ".vert", prefix ++ ".frag") ) names -- [(fullvert,fullfrag)]
 
-  let emptyMap = HashMap.empty :: HashMap.Map String Shader
+  res <- H.new :: IO (HashTable String Shader)
 
   let len = Prelude.length names
-  (_, res) <- for 0 (<len) (+1) (paired, emptyMap) $ \ _ (  (f,s) : xs   , m ) -> do
+  _ <- for 0 (<len) (+1) paired $ \ _ ((f,s) : xs) -> do
     let name = f |> takeFileName |> dropExtension
     i <- loadShader f s
-    pure (xs, HashMap.insert name (Shader i) m)
+    H.insert res name (Shader i)
+    pure xs
 
   println "Shaders loaded"
 
@@ -155,21 +156,21 @@ initRegistry win = do
   writeIORef packData $ Just lPackData
   pure (reg,lPackData)
 
-sysLoadPacks :: WindowInfo -> HashMap.Map String Shader -> Registry -> PackData -> IO ()
+sysLoadPacks :: WindowInfo -> HashTable String Shader -> Registry -> PackData -> IO ()
 sysLoadPacks windowInfo shaders registry packData = do
   let packs = Reg.dataPacks packData
   cfor 0 ((>) <$> ArrayBuffer.size packs) (+1) $ \i -> do
     pack <- ArrayBuffer.get packs i
     Reg.packInit pack registry
 
-sysUnloadPacks :: WindowInfo -> HashMap.Map String Shader -> Registry -> PackData -> IO ()
+sysUnloadPacks :: WindowInfo -> HashTable String Shader -> Registry -> PackData -> IO ()
 sysUnloadPacks windowInfo shaders registry packData = do
   let packs = Reg.dataPacks packData
   cfor 0 ((>) <$> ArrayBuffer.size packs) (+1) $ \i -> do
     pack <- ArrayBuffer.get packs i
     Reg.packDeinit pack registry
 
-sysInit :: IO (WindowInfo, HashMap.Map String Shader, Registry, PackData)
+sysInit :: IO (WindowInfo, HashTable String Shader, Registry, PackData)
 sysInit = do
   windowInfo <- initGL
   shaders <- loadShaders
@@ -182,7 +183,7 @@ sysRun windowInfo shaders = do
 
   while shouldNotClose (windowInfo |> Reg.windowId) $ \w -> do
 
-       Renderer.sysDraw windowInfo
+       Renderer.sysDraw windowInfo shaders
 
        glfwPollEvents
        return w

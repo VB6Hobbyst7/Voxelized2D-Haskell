@@ -21,6 +21,20 @@ isInUse (Shader id) = do
   ret <- peek ptr
   pure $ fromIntegral ret == id
 
+enable :: Shader -> IO Bool
+enable shader@(Shader id) = do
+  using <- isInUse shader
+  if using then pure False
+  else do glUseProgram id
+          pure True
+
+disable :: Shader -> IO Bool
+disable shader@(Shader id) = do
+  using <- isInUse shader
+  if not using then pure False
+  else do glUseProgram 0
+          pure True
+
 setMat4 :: Int -> Mat N4 N4 Float -> Bool -> IO ()
 setMat4 loc mat transpose = glUniformMatrix4fv loc transpose mat
 

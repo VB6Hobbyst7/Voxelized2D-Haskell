@@ -25,7 +25,8 @@ init reg = do
   Registry.addKeyCallback reg keyCallback
   Registry.addMouseCallback reg mouseCallback
 
-  error "fuck, man !"
+
+  --error "fuck, man !" --TODO test error
   println "core pack init !"
 
 deinit reg = do

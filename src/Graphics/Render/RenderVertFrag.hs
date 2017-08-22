@@ -17,47 +17,52 @@ import Control.Monad
 import qualified Language.C.Inline as C
 import qualified Language.C.Inline.Unsafe as UC
 
-data RenderVertFrag = RenderVertFrag
- {
-    renderMode :: Int,
-    setAttributePointers :: IO (),
-    construct :: Data -> IO (Bool,Data),
-    deconstruct :: Data -> IO (Bool,Data),
-    draw :: Data -> IO Bool,
-    shaderName :: String
-  }
+import Data.IORef
 
-type Data = RenderVertFragDataDefault
 
-data RenderVertFragDataDefault = RenderVertFragData
-  {
-    vertexSize :: Int,
-    vertexPool :: Mem.MemBlock CFloat,
+--interface for any rendering VAO
+data RenderVertFrag = RenderVertFrag{
+  renderMode ::           IO Int,
+  setAttributePointers :: IO (),
+  construct ::            IO Bool,
+  deconstruct ::          IO Bool, --for opengl deconstruction
+  draw ::                 IO Bool,
+  shaderName ::           IO String,
+  free ::                 IO ()     --for freeing of RAM buffers
+}
+
+
+
+--default data for simple VAO
+data RenderVertFragDataDefault = RenderVertFragDataDefault{
+    vertexPool :: Mem.MemBlock CFloat, --TODO do not forget to free !
     indexPool :: Mem.MemBlock CInt,
     vertexCount :: Int,
     vao :: Int,
     vbo :: Int,
     ebo :: Int,
     constructed :: Bool
-  }
+}
 
 
-vertexSizeColor = 6 :: Int
+vertexSizeColor = pure 6 :: IO Int
 
 setAttributePointersColor :: IO ()
-setAttributePointersColor =
-  let vertexSize = vertexSizeColor
-      stride = 4 * vertexSize
-  in do
-      glVertexAttribPointer 0 3 c_GL_FLOAT False stride 0
-      glEnableVertexAttribArray 0
+setAttributePointersColor = do
+  vertexSize <- vertexSizeColor
+  let stride = 4 * vertexSize
+  glVertexAttribPointer 0 3 c_GL_FLOAT False stride 0
+  glEnableVertexAttribArray 0
 
-      glVertexAttribPointer 1 3 c_GL_FLOAT False stride (3 * 4)
-      glEnableVertexAttribArray 1
+  glVertexAttribPointer 1 3 c_GL_FLOAT False stride (3 * 4)
+  glEnableVertexAttribArray 1
 
 
-addTriangle :: Data -> Triangle Float -> Vec N3 Float -> IO Data
-addTriangle (RenderVertFragData vs vp ip vc vao vbo ebo constr) triangle color = do
+
+--probably move this function to separate module
+addTriangle :: IORef RenderVertFragDataDefault -> Triangle Float -> Vec N3 Float -> IO ()
+addTriangle dat triangle color = do
+  (RenderVertFragDataDefault vp ip vc vao vbo ebo constr) <- readIORef dat
   vp <- Mem.add vp $ realToFrac(x $ p1 triangle)
   vp <- Mem.add vp $ realToFrac(y $ p1 triangle)
   vp <- Mem.add vp $ realToFrac(z $ p1 triangle)
@@ -86,17 +91,25 @@ addTriangle (RenderVertFragData vs vp ip vc vao vbo ebo constr) triangle color =
   ip <- Mem.add ip 1
   ip <- Mem.add ip 2
 
-  pure (RenderVertFragData vs vp ip vc vao vbo ebo constr)
+  writeIORef dat $ RenderVertFragDataDefault vp ip vc vao vbo ebo constr
 
-renderVertFragDefault :: Int -> Int -> IO () -> String -> IO (Data, RenderVertFrag)
+  pure ()
+
+newDefaultData :: IO (IORef RenderVertFragDataDefault)
+newDefaultData = do
+  vp <- Mem.new 8 :: IO (Mem.MemBlock CFloat)
+  ip <- Mem.new 8 :: IO (Mem.MemBlock CInt)
+  let dat = RenderVertFragDataDefault vp ip 0 0 0 0 False
+  newIORef dat
+
+renderVertFragDefault :: IO Int -> IO Int -> IO () -> IO String -> IO (IORef RenderVertFragDataDefault, RenderVertFrag)
 renderVertFragDefault mode vertSize setAttribPointers shaderName = do
-    vp <- Mem.new 8 :: IO (Mem.MemBlock CFloat)
-    ip <- Mem.new 8 :: IO (Mem.MemBlock CInt)
-    let dat = RenderVertFragData vertSize vp ip 0 0 0 0 False
+    mdat <- newDefaultData
 
     let
-      construct :: Data -> IO (Bool, Data)
-      construct dat@(RenderVertFragData vertSize vp ip vc _ _ _ _) =
+      construct :: IORef RenderVertFragDataDefault -> IO Bool
+      construct mdat = do
+          dat@(RenderVertFragDataDefault vp ip vc _ _ _ _) <- readIORef mdat
           if not $ constructed dat then do
 
             vao <- glGenVertexArrays
@@ -115,30 +128,41 @@ renderVertFragDefault mode vertSize setAttribPointers shaderName = do
 
             --glBindBuffer c_GL_ARRAY_BUFFER 0
             --glBindVertexArray 0 TODO
-            pure (True, RenderVertFragData vertSize vp ip vc vao vbo ebo True)
+            writeIORef mdat $ RenderVertFragDataDefault vp ip vc vao vbo ebo True
+            pure True
           else
-            pure (False,dat)
+            pure False
 
-      deconstruct :: Data -> IO (Bool,Data)
-      deconstruct dat@(RenderVertFragData vertSize vp ip vc vao vbo ebo _) =
+      deconstruct :: IORef RenderVertFragDataDefault -> IO Bool
+      deconstruct mdat = do
+        dat@(RenderVertFragDataDefault vp ip vc vao vbo ebo _) <- readIORef mdat
         if constructed dat then do
           glDeleteVertexArrays vao
           glDeleteBuffers vbo
           glDeleteBuffers ebo
-          pure (True, RenderVertFragData vertSize vp ip vc vao vbo ebo False)
+          writeIORef mdat $ RenderVertFragDataDefault vp ip vc vao vbo ebo False
+          pure True
         else
-          pure (False,dat)
+          pure False
 
-      draw :: Data -> IO Bool
-      draw dat =
+      draw :: IORef RenderVertFragDataDefault -> IO Bool
+      draw mdat = do
+        dat <- readIORef mdat
         if constructed dat then do
           glBindVertexArray $ vao dat
-          glDrawElements mode (Mem.stored $ indexPool dat) c_GL_UNSIGNED_INT nullPtr
+          smode <- mode
+          glDrawElements smode (Mem.stored $ indexPool dat) c_GL_UNSIGNED_INT nullPtr
           glBindVertexArray 0
           pure True
         else
           pure False
 
-      render = RenderVertFrag mode setAttribPointers construct deconstruct draw shaderName
+      free :: IORef RenderVertFragDataDefault -> IO ()
+      free mdat = do
+        dat <- readIORef mdat
+        dat.>vertexPool.>Mem.delete
+        dat.>indexPool.>Mem.delete
 
-    pure (dat, render)
+    let render = RenderVertFrag mode setAttribPointers (construct mdat) (deconstruct mdat) (draw mdat) shaderName (free mdat)--those args should be lazy, TODO verify that !
+
+    pure (mdat, render)
