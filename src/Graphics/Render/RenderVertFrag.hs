@@ -102,6 +102,7 @@ newDefaultData = do
   let dat = RenderVertFragDataDefault vp ip 0 0 0 0 False
   newIORef dat
 
+--return data and renderer. CAUTION ! renderer is bind to the data returned (by reference), changing the data changes how rendering occurs
 renderVertFragDefault :: IO Int -> IO Int -> IO () -> IO String -> IO (IORef RenderVertFragDataDefault, RenderVertFrag)
 renderVertFragDefault mode vertSize setAttribPointers shaderName = do
     mdat <- newDefaultData

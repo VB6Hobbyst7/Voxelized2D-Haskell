@@ -15,6 +15,7 @@ import qualified Graphics.Shader.ShaderUtils as SU
 import Data.Maybe
 import Registry(RenderTranformation(..), RenderLifetime(..))
 import qualified Data.HashTable.IO as H
+import qualified Memory.ArrayBuffer as ArrayBuffer
 
 sysDraw :: WindowInfo -> HashTable String Shader -> IO ()
 sysDraw windowInfo shaders = do
@@ -62,3 +63,6 @@ drawUI windowInfo shaders = do
     SU.disable shader
 
     ) onetime
+
+  newTable <- H.new
+  writeIORef Reg.lifetimeOneDrawRenderers newTable --reset the table after rendering

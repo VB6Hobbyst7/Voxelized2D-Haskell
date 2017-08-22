@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, RankNTypes, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, RankNTypes, FlexibleInstances, InstanceSigs, Strict #-}
 
 module Memory.ArrayBuffer where
 
@@ -6,14 +6,15 @@ import Data.Array.IO
 import Data.IORef
 import Common
 
+_arrayBufferDefaultSize = 8 :: Int
 
-class (Num i) => DynamicArrayContainer a i e where
+class (Num i) => DynamicArrayContainer a i e where --TODO convert back to regular functions
   size :: a i e -> IO i
   allocatedSize :: a i e -> IO i
   array :: a i e -> IO (IOArray i e)
   new :: i -> IO (a i e)
   push :: a i e -> e -> IO (a i e)
-  get :: a i e -> i -> IO e
+  read :: a i e -> i -> IO e
   write :: a i e -> i -> e -> IO (a i e)
 
 --fully mutable record, c++ like (feature lacking) vector
@@ -25,7 +26,7 @@ grow buf delta = do
   let newSize = allocSize + delta
   ar <- newArray_ (0, newSize) :: IO (IOArray Int a)
   cfor 0 ( (>) <$> size buf) (+1) $ \i -> do
-    t <- get buf i
+    t <- Memory.ArrayBuffer.read buf i
     writeArray ar i t
     pure ()
   writeIORef (marray buf) ar
@@ -39,6 +40,20 @@ growIfNecessary buf newSize = do
     pure ()
   else
     pure ()
+
+
+mapM_ :: (e -> IO a) -> ArrayBuffer Int e -> IO ()
+mapM_ fun buf = do
+  len <- buf.>size
+
+  cfor 0 ((>) <$> buf.>size) (+1) $ \i -> do
+    element <- Memory.ArrayBuffer.read buf i
+    fun element
+
+
+--does not free up the elements (gc wont do it), only set the size to 0
+clear :: (Num i) => ArrayBuffer i e -> IO ()
+clear buf = writeIORef (buf.>msize) 0
 
 
 instance DynamicArrayContainer ArrayBuffer Int a where
@@ -66,7 +81,7 @@ instance DynamicArrayContainer ArrayBuffer Int a where
     writeIORef (msize buffer) (size+1)
     pure buffer
 
-  get buf index = do
+  read buf index = do
     ar <- array buf
     readArray ar index
 

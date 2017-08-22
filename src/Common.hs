@@ -20,7 +20,7 @@ int :: Int -> Int
 int a = a
 
 --this operator is meant to be used as a record's field accessor
-infixl 8 .>
+infixl 9 .>
 (.>) :: a -> (a -> b) -> b
 (.>) record field = field record
 

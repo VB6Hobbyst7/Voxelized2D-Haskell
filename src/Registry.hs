@@ -24,6 +24,13 @@ lifetimeOneDrawRenderers =
     table <- H.new
     newIORef table
 
+lifetimeManualRenderers :: IORef (HashTable Int ( RenderVertFrag, RenderDataProvider) )
+{-# NOINLINE lifetimeManualRenderers #-}
+lifetimeManualRenderers =
+  unsafePerformIO $ do
+    table <- H.new
+    newIORef table
+
 currentRenderId :: IORef Int
 {-# NOINLINE currentRenderId #-}
 currentRenderId = unsafePerformIO (newIORef 0)
@@ -35,18 +42,23 @@ data WindowInfo = WindowInfo{windowId :: Ptr (), windowWidth :: Int, windowHeigh
 
 data Pack = Pack {packName :: String, packVersion :: String, packInit :: Registry -> IO (), packDeinit :: Registry -> IO ()}
 
-data PackData = PackData{dataPacks :: ArrayBuffer Int Pack, dataKeyCallbacks :: ArrayBuffer Int GLFWkeyfun, dataMouseCallbacks :: ArrayBuffer Int GLFWmousebuttonfun}
+data PackData = PackData{dataPacks :: ArrayBuffer Int Pack, dataKeyCallbacks :: ArrayBuffer Int GLFWkeyfun, dataMouseCallbacks :: ArrayBuffer Int GLFWmousebuttonfun, dataUpdateCallbacks :: ArrayBuffer Int (WindowInfo -> IO ())}
 
 type ApplyShaderData = Shader -> WindowInfo -> IO ()
 type ApplyPreRenderState = IO ()
 type ApplyPostRenderState = IO ()
 
-data RenderDataProvider = RenderDataProvider {applyShaderData :: Maybe ApplyShaderData, applyPreRenderState :: Maybe ApplyPreRenderState, applyPostRenderState :: Maybe ApplyPostRenderState}
+data RenderDataProvider = RenderDataProvider {
+  applyShaderData :: Maybe ApplyShaderData,
+  applyPreRenderState :: Maybe ApplyPreRenderState,
+  applyPostRenderState :: Maybe ApplyPostRenderState
+}
 
 data Registry = Registry {
   addPack :: Pack -> IO (),
   addKeyCallback :: GLFWkeyfun -> IO (),
-  addMouseCallback :: GLFWmousebuttonfun -> IO ()
+  addMouseCallback :: GLFWmousebuttonfun -> IO (),
+  addUpdateCallback :: (WindowInfo -> IO ()) -> IO ()
 }
 
 data Render = Render{
@@ -109,8 +121,11 @@ _pushImpl lifetime transform render maybeProvider =
       let newProvider = RenderDataProvider (Just lcombinedProvider) pre post
 
       case lifetime of
-        RenderLifetimeOneDraw -> pure () --TODO continue here, lifetimeOneDrawRenderers should be mutable hashmap !!! not mutable reference to immutable hashmap !!!
-        RenderLifetimeManual -> pure () --TODO implement
-        _ -> pure ()
+        RenderLifetimeOneDraw -> do
+          oneDraw <- readIORef lifetimeOneDrawRenderers
+          (oneDraw.>H.insert) id (render,newProvider)
+        RenderLifetimeManual -> do
+          manual <- readIORef lifetimeManualRenderers
+          (manual.>H.insert) id (render,newProvider)
 
       pure id

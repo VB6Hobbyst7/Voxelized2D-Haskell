@@ -137,22 +137,29 @@ initRegistry win = do
   packs <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int Pack)
   keyCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int GLFWkeyfun)
   mouseCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int GLFWmousebuttonfun)
+  updateCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int (WindowInfo -> IO () ) )
   let
     addPack :: Pack -> IO ()
     addPack e = do
       ArrayBuffer.push packs e
       pure ()
-  let
+
     addKeyCallback :: GLFWkeyfun -> IO ()
     addKeyCallback fun = do
       ArrayBuffer.push keyCallbacks fun
       pure ()
-  let
+
     addMouseCallback fun = do
       ArrayBuffer.push mouseCallbacks fun
       pure ()
-  let reg = Registry addPack addKeyCallback addMouseCallback
-  let lPackData = PackData packs keyCallbacks mouseCallbacks
+
+    addUpdateCallback :: (WindowInfo -> IO ()) -> IO ()
+    addUpdateCallback fun = do
+      ArrayBuffer.push updateCallbacks fun
+      pure ()
+
+  let reg = Registry addPack addKeyCallback addMouseCallback addUpdateCallback
+  let lPackData = PackData packs keyCallbacks mouseCallbacks updateCallbacks
   writeIORef packData $ Just lPackData
   pure (reg,lPackData)
 
@@ -160,14 +167,14 @@ sysLoadPacks :: WindowInfo -> HashTable String Shader -> Registry -> PackData ->
 sysLoadPacks windowInfo shaders registry packData = do
   let packs = Reg.dataPacks packData
   cfor 0 ((>) <$> ArrayBuffer.size packs) (+1) $ \i -> do
-    pack <- ArrayBuffer.get packs i
+    pack <- ArrayBuffer.read packs i
     Reg.packInit pack registry
 
 sysUnloadPacks :: WindowInfo -> HashTable String Shader -> Registry -> PackData -> IO ()
 sysUnloadPacks windowInfo shaders registry packData = do
   let packs = Reg.dataPacks packData
   cfor 0 ((>) <$> ArrayBuffer.size packs) (+1) $ \i -> do
-    pack <- ArrayBuffer.get packs i
+    pack <- ArrayBuffer.read packs i
     Reg.packDeinit pack registry
 
 sysInit :: IO (WindowInfo, HashTable String Shader, Registry, PackData)
@@ -177,11 +184,19 @@ sysInit = do
   (reg,packData) <- initRegistry windowInfo
   return (windowInfo, shaders,reg,packData)
 
-sysRun windowInfo shaders = do
+
+sysUpdate :: WindowInfo -> HashTable String Shader -> Registry -> PackData -> IO ()
+sysUpdate windowInfo shaders registry packData = do
+  ArrayBuffer.mapM_ (\fun -> fun windowInfo) (packData.>dataUpdateCallbacks)
+
+sysRun :: WindowInfo -> HashTable String Shader -> Registry -> PackData -> IO ()
+sysRun windowInfo shaders registry packData = do
 
   let shouldNotClose w = (== c_GLFW_FALSE) <$> glfwWindowShouldClose w
 
   while shouldNotClose (windowInfo |> Reg.windowId) $ \w -> do
+
+       sysUpdate windowInfo shaders registry packData
 
        Renderer.sysDraw windowInfo shaders
 
@@ -210,7 +225,7 @@ main = do
 
   sysLoadPacks winInfo shaders registry packData
 
-  sysRun winInfo shaders
+  sysRun winInfo shaders registry packData
 
   sysUnloadPacks winInfo shaders registry packData
 
@@ -234,7 +249,7 @@ keyCallback w key scancode action mods =
     let callbacks = dataKeyCallbacks packData
 
     cfor (0 :: Int) ( (>) <$> ArrayBuffer.size callbacks) (+1) $ \i -> do
-      callback <- ArrayBuffer.get callbacks i
+      callback <- ArrayBuffer.read callbacks i
       callback w key scancode action mods --call all registred callbacks
 
     pure ()
@@ -245,7 +260,7 @@ mouseCallback w button action mods = do
   let callbacks = dataMouseCallbacks packData
 
   cfor (0 :: Int) ( (>) <$> ArrayBuffer.size callbacks) (+1) $ \i -> do
-    callback <- ArrayBuffer.get callbacks i
+    callback <- ArrayBuffer.read callbacks i
     callback w button action mods --call all registred callbacks
 
   pure ()
