@@ -48,7 +48,7 @@ init reg _win = do
   Registry.addMouseCallback reg mouseCallback
   Registry.addUpdateCallback reg updateCallback
 
-  let triangle = Triangle (vec3  0 height 0) (vec3 width height 0) (vec3 (width/2) height 0)
+  let triangle = Triangle (vec3  0 height 0) (vec3 width height 0) (vec3 (width/2) 0 0)
   (dat, _renderer) <- RVF.renderVertFragDefault (pure c_GL_TRIANGLES) RVF.vertexSizeColor setAttributePointersColor (pure "color")
   writeIORef renderer (Just _renderer)
   RVF.addTriangle dat triangle (vec3 1 1 0)
