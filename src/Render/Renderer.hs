@@ -17,19 +17,21 @@ import Registry(RenderTranformation(..), RenderLifetime(..))
 import qualified Data.HashTable.IO as H
 import qualified Memory.ArrayBuffer as ArrayBuffer
 
-sysDraw :: WindowInfo -> HashTable String Shader -> IO ()
-sysDraw windowInfo shaders = do
+sysDraw :: IORef WindowInfo -> HashTable String Shader -> IO ()
+sysDraw _windowInfo shaders = do
+  windowInfo <- readIORef _windowInfo
+
   glClear c_GL_COLOR_BUFFER_BIT
   glClearColor (Def.backGroundColor.>x) (Def.backGroundColor.>y) (Def.backGroundColor.>z) 1
 
-  drawUI windowInfo shaders
+  drawUI _windowInfo shaders
 
-  glfwSwapBuffers (windowInfo |> Reg.windowId)
+  glfwSwapBuffers (windowInfo.>Reg.windowId)
 
 
-drawUI :: WindowInfo -> HashTable String Shader -> IO ()
-drawUI windowInfo shaders = do
-
+drawUI :: IORef WindowInfo -> HashTable String Shader -> IO ()
+drawUI _windowInfo shaders = do
+  windowInfo <- readIORef _windowInfo
   --lifetime : one draw
   onetime <- readIORef Reg.lifetimeOneDrawRenderers
   H.mapM_ (\(_,val) -> do -- == foreach do
@@ -54,6 +56,7 @@ drawUI windowInfo shaders = do
 
     render.>construct
     render.>draw
+    shader.>SU.disable
     render.>deconstruct
 
     if isJust (Reg.applyPostRenderState provider) then do
@@ -94,6 +97,7 @@ drawUI windowInfo shaders = do
 
     --render.>construct          construction is on user's side
     render.>draw
+    shader.>SU.disable
     --render.>deconstruct        same for deconstruction
 
     if isJust (Reg.applyPostRenderState provider) then do

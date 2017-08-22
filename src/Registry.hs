@@ -16,6 +16,8 @@ import System.IO.Unsafe
 import Control.Exception
 import Data.Typeable
 import Common
+import Math.Linear.Mat
+import qualified Math.Nat as Nat
 
 lifetimeOneDrawRenderers :: IORef (HashTable Int ( RenderVertFrag, RenderDataProvider) )
 {-# NOINLINE lifetimeOneDrawRenderers #-}
@@ -40,9 +42,9 @@ data RenderTranformation = RenderTransformationNone | RenderTransformationUI | R
 
 data WindowInfo = WindowInfo{windowId :: Ptr (), windowWidth :: Int, windowHeight :: Int}
 
-data Pack = Pack {packName :: String, packVersion :: String, packInit :: Registry -> IO (), packDeinit :: Registry -> IO ()}
+data Pack = Pack {packName :: String, packVersion :: String, packInit :: Registry -> IORef WindowInfo -> IO (), packDeinit :: Registry -> IORef WindowInfo -> IO ()}
 
-data PackData = PackData{dataPacks :: ArrayBuffer Int Pack, dataKeyCallbacks :: ArrayBuffer Int GLFWkeyfun, dataMouseCallbacks :: ArrayBuffer Int GLFWmousebuttonfun, dataUpdateCallbacks :: ArrayBuffer Int (WindowInfo -> IO ())}
+data PackData = PackData{dataPacks :: ArrayBuffer Int Pack, dataKeyCallbacks :: ArrayBuffer Int GLFWkeyfun, dataMouseCallbacks :: ArrayBuffer Int GLFWmousebuttonfun, dataUpdateCallbacks :: ArrayBuffer Int (IORef WindowInfo -> IO ())}
 
 type ApplyShaderData = Shader -> WindowInfo -> IO ()
 type ApplyPreRenderState = IO ()
@@ -58,7 +60,7 @@ data Registry = Registry {
   addPack :: Pack -> IO (),
   addKeyCallback :: GLFWkeyfun -> IO (),
   addMouseCallback :: GLFWmousebuttonfun -> IO (),
-  addUpdateCallback :: (WindowInfo -> IO ()) -> IO ()
+  addUpdateCallback :: (IORef WindowInfo -> IO ()) -> IO ()
 }
 
 data Render = Render{
@@ -105,7 +107,12 @@ _pushImpl lifetime transform render maybeProvider =
 
 
       lcombinedProvider <- case transform of
-        RenderTransformationUI -> pure providerByUser --TODO implement
+        RenderTransformationUI ->
+          pure $ \shader win -> do
+            println $ "width : " ++ (show $ win.>windowWidth) ++ ", height : " ++ (show $ win.>windowHeight)
+            (shader.>SU.setMat4) "P" (ortho 0 (fromIntegral $ win.>windowWidth) (fromIntegral $ win.>windowHeight) 0 (-1) 1 ) False
+            (shader.>SU.setMat4) "V" (identity Nat.n4) False
+
         RenderTransformationNone -> pure providerByUser
         _ -> throw UnsupportedRenderTransformationException
 

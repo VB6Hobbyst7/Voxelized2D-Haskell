@@ -120,7 +120,7 @@ initGL = do
       writeIORef windowInfo info
       println "OpenGL initialized"
 
-      return info
+      return ()
     else
       error "failed to initialize GLAD"
   else
@@ -152,12 +152,12 @@ loadShaders = do
   pure res
 
 
-initRegistry :: WindowInfo -> IO (Registry,PackData)
-initRegistry win = do
+initRegistry :: IO Registry
+initRegistry = do
   packs <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int Pack)
   keyCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int GLFWkeyfun)
   mouseCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int GLFWmousebuttonfun)
-  updateCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int (WindowInfo -> IO () ) )
+  updateCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int (IORef WindowInfo -> IO () ) )
   let
     addPack :: Pack -> IO ()
     addPack e = do
@@ -173,7 +173,7 @@ initRegistry win = do
       ArrayBuffer.push mouseCallbacks fun
       pure ()
 
-    addUpdateCallback :: (WindowInfo -> IO ()) -> IO ()
+    addUpdateCallback :: (IORef WindowInfo -> IO ()) -> IO ()
     addUpdateCallback fun = do
       ArrayBuffer.push updateCallbacks fun
       pure ()
@@ -181,42 +181,46 @@ initRegistry win = do
   let reg = Registry addPack addKeyCallback addMouseCallback addUpdateCallback
   let lPackData = PackData packs keyCallbacks mouseCallbacks updateCallbacks
   writeIORef packData $ Just lPackData
-  pure (reg,lPackData)
+  pure reg
 
-sysLoadPacks :: WindowInfo -> HashTable String Shader -> Registry -> PackData -> IO ()
-sysLoadPacks windowInfo shaders registry packData = do
-  let packs = Reg.dataPacks packData
+sysLoadPacks :: HashTable String Shader -> Registry -> IO ()
+sysLoadPacks shaders registry = do
+  (Just _packData) <- readIORef packData
+  let packs = Reg.dataPacks _packData
   cfor 0 ((>) <$> ArrayBuffer.size packs) (+1) $ \i -> do
     pack <- ArrayBuffer.read packs i
-    Reg.packInit pack registry
+    Reg.packInit pack registry windowInfo
 
-sysUnloadPacks :: WindowInfo -> HashTable String Shader -> Registry -> PackData -> IO ()
-sysUnloadPacks windowInfo shaders registry packData = do
-  let packs = Reg.dataPacks packData
+sysUnloadPacks :: HashTable String Shader -> Registry -> IO ()
+sysUnloadPacks shaders registry = do
+  (Just _packData) <- readIORef packData
+  let packs = Reg.dataPacks _packData
   cfor 0 ((>) <$> ArrayBuffer.size packs) (+1) $ \i -> do
     pack <- ArrayBuffer.read packs i
-    Reg.packDeinit pack registry
+    Reg.packDeinit pack registry windowInfo
 
-sysInit :: IO (WindowInfo, HashTable String Shader, Registry, PackData)
+sysInit :: IO (HashTable String Shader, Registry)
 sysInit = do
-  windowInfo <- initGL
+  initGL
   shaders <- loadShaders
-  (reg,packData) <- initRegistry windowInfo
-  return (windowInfo, shaders,reg,packData)
+  reg <- initRegistry
+  return (shaders,reg)
 
 
-sysUpdate :: WindowInfo -> HashTable String Shader -> Registry -> PackData -> IO ()
-sysUpdate windowInfo shaders registry packData = do
-  ArrayBuffer.mapM_ (\fun -> fun windowInfo) (packData.>dataUpdateCallbacks)
+sysUpdate :: HashTable String Shader -> Registry -> IO ()
+sysUpdate shaders registry = do
+  (Just _packData) <- readIORef packData
+  ArrayBuffer.mapM_ (\fun -> fun windowInfo) (_packData.>dataUpdateCallbacks)
 
-sysRun :: WindowInfo -> HashTable String Shader -> Registry -> PackData -> IO ()
-sysRun windowInfo shaders registry packData = do
+sysRun :: HashTable String Shader -> Registry -> IO ()
+sysRun shaders registry = do
 
   let shouldNotClose w = (== c_GLFW_FALSE) <$> glfwWindowShouldClose w
 
-  while shouldNotClose (windowInfo |> Reg.windowId) $ \w -> do
+  _win <- readIORef windowInfo
+  while shouldNotClose (_win.>Reg.windowId) $ \w -> do
 
-       sysUpdate windowInfo shaders registry packData
+       sysUpdate shaders registry
 
        Renderer.sysDraw windowInfo shaders
 
@@ -226,7 +230,7 @@ sysRun windowInfo shaders registry packData = do
   pure ()
 
 
-sysTerminate windowInfo shaders = do
+sysTerminate shaders = do
   glfwTerminate
   --free all callbacks (on haskell side)
   freeHaskellFunPtr <$> readIORef errorCallbackPtr
@@ -238,18 +242,18 @@ sysTerminate windowInfo shaders = do
 
 main :: IO ()
 main = do
-  (winInfo,shaders,registry,packData) <- sysInit
+  (shaders,registry) <- sysInit
 
   --add core pack
   Reg.addPack registry CorePack.pack
 
-  sysLoadPacks winInfo shaders registry packData
+  sysLoadPacks shaders registry
 
-  sysRun winInfo shaders registry packData
+  sysRun shaders registry
 
-  sysUnloadPacks winInfo shaders registry packData
+  sysUnloadPacks shaders registry
 
-  sysTerminate winInfo shaders
+  sysTerminate shaders
 
 
 --callbacks

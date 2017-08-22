@@ -29,7 +29,7 @@ mouseCallback :: GLFWmousebuttonfun
 mouseCallback w button action mods = do
   println $ "you pressed mouse button with number " ++ show button
 
-updateCallback :: WindowInfo -> IO ()
+updateCallback :: IORef WindowInfo -> IO ()
 updateCallback windowInfo = do
   pure ()
 
@@ -37,20 +37,25 @@ declareIORef "renderer"        --global mutable state ! Good way !!
   [t| Maybe RenderVertFrag |]
   [e| Nothing  |]
 
-init reg = do
+init reg _win = do
+
+  win <- readIORef _win
+
+  let width = fromIntegral $ win.>windowWidth :: Float
+  let height = fromIntegral $ win.>windowHeight :: Float
 
   Registry.addKeyCallback reg keyCallback
   Registry.addMouseCallback reg mouseCallback
   Registry.addUpdateCallback reg updateCallback
 
-  let triangle = Triangle (vec3 (-1) 0 0) (vec3 1 0 0) (vec3 0 1 0)
+  let triangle = Triangle (vec3  0 height 0) (vec3 width height 0) (vec3 (width/2) height 0)
   (dat, _renderer) <- RVF.renderVertFragDefault (pure c_GL_TRIANGLES) RVF.vertexSizeColor setAttributePointersColor (pure "color")
   writeIORef renderer (Just _renderer)
   RVF.addTriangle dat triangle (vec3 1 1 0)
 
   _renderer.>RVF.construct
 
-  (Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _renderer $
+  (Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationUI _renderer $
     Just $ Registry.RenderDataProvider (Just $ \ shader _ -> do
       (shader.>SU.setMat4) "V" (identity n4) False
       (shader.>SU.setMat4) "P" (identity n4) False
@@ -60,7 +65,7 @@ init reg = do
 
   println "core pack init !"
 
-deinit reg = do
+deinit reg win = do
 
   (renderer.>readIORef) >>= (\(Just x) -> do x.>RVF.deconstruct;x.>RVF.free)
 
