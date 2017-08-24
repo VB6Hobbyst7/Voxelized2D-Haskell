@@ -109,7 +109,6 @@ _pushImpl lifetime transform render maybeProvider =
       lcombinedProvider <- case transform of
         RenderTransformationUI ->
           pure $ \shader win -> do
-            println $ "width : " ++ (show $ win.>windowWidth) ++ ", height : " ++ (show $ win.>windowHeight)
             (shader.>SU.setMat4) "P" (ortho 0 (fromIntegral $ win.>windowWidth) (fromIntegral $ win.>windowHeight) 0 (-1) 1 ) False
             (shader.>SU.setMat4) "V" (identity Nat.n4) False
 

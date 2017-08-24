@@ -4,6 +4,7 @@ module Math.Linear.Vec where
 import Math.Nat
 import TypeClass.Vector
 import TypeClass.Append
+import Common
 
 infixr 8 :>
 data  Vec :: Nat -> * -> * where   --same as : data List (n :: Nat) a where ...
@@ -49,6 +50,10 @@ vec3 a b c = a :> b :> c :> Nil
 vec4 :: a -> a -> a -> a -> Vec N4 a
 vec4 a b c d = a :> b :> c :> d :> Nil
 
+
+ortho :: (Num a) => Vec N2 a -> Vec N2 a
+ortho a = vec2 (-a.>y) (a.>x)
+
 instance (Show a) => Show (Vec n a) where
 
     show all@(x :> _) = "[" ++ show1 all ++ "]"
@@ -72,6 +77,9 @@ instance (Floating a) => Vector (Vec n a) where
 
     (x :> xs) |* k = (x * k) :> (xs |* k)
     k *| (y :> ys) = (k * y) :> (k *| ys)
+
+    (x :> xs) |*| (y :> ys) = (x * y) :> (xs |*| ys)
+    Nil |*| Nil = Nil
 
     (u1 :> u2 :> u3 :> Nil) `cross` (v1 :> v2 :> v3 :> Nil) = (u2 * v3 - u3 * v2) :> (u3 * v1 - u1 * v3) :> (u1 * v2 - u2 * v1) :> Nil
 
