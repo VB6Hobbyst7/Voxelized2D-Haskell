@@ -2,6 +2,8 @@ profiling
 keep watching https://ghc.haskell.org/trac/ghc/wiki/Records/OverloadedRecordFields
 
 
+FIX FREAKING (>) (<) signs flipped in IO cfor
+
 immutable IOrefs (ex usage : passing immutable reference to WindowInfo to Packs)
 
 scala RenderingEngine -> Renderer

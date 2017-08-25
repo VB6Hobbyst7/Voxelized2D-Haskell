@@ -15,6 +15,9 @@ class Vector a where
     cross :: (Floating (T a)) => a -> a -> a
     (|*|) :: (Floating (T a)) => a -> a -> a
 
+    (|/)  :: (Floating (T a)) => a -> T a -> a
+    (|/) vec scalar = vec |* (1 / scalar)
+
     smag :: (Floating (T a)) => a -> T a
     smag x = x `dot` x
 

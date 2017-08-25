@@ -76,7 +76,10 @@ instance (Floating a) => Vector (Vec n a) where
     Nil `dot` Nil = 0
 
     (x :> xs) |* k = (x * k) :> (xs |* k)
+    Nil |* k = Nil
+
     k *| (y :> ys) = (k * y) :> (k *| ys)
+    k *| Nil = Nil
 
     (x :> xs) |*| (y :> ys) = (x * y) :> (xs |*| ys)
     Nil |*| Nil = Nil
