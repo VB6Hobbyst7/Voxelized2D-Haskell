@@ -50,6 +50,10 @@ declareIORef "renderer"        --global mutable state ! Good way !!
   [t| Maybe RenderVertFrag |]
   [e| Nothing  |]
 
+declareIORef "linesRenderer"
+  [t|Maybe RenderVertFrag|]
+  [e|Nothing|]
+
 _block_size = 0.125 :: Float
 _chunk_size = 128 :: Int
 
@@ -123,8 +127,8 @@ sampleTangent square n f = do
   closest <- newIORef (denAtCenter + placeholderHugeF)
   closestPoint <- newIORef (square.>center)
 
-  cfor 0 (pure $ (<) n) (+1) $ \i ->
-    cfor 0 (pure $ (<) n) (+1) $ \j -> do
+  cfor 0 (pure $ (>) n) (+1) $ \i ->
+    cfor 0 (pure $ (>) n) (+1) $ \j -> do
       let point = min |+| ext |*| vec2 (2 * fromIntegral i / fromIntegral n) (2 * fromIntegral j / fromIntegral n)
       den <- f point
       let attempt = abs (den - denAtCenter)
@@ -185,7 +189,7 @@ makeVertex vg tr x y f accuracy features outIntersections outExtra = do
           let negative = p_a < 0
           if negative then do
             (outIntersections.>ArrayBuffer.push) v_a
-            (outIntersections.>ArrayBuffer.push) v_b
+            (outExtra.>ArrayBuffer.push) v_b
             pure ()
           else
             pure ()
@@ -329,9 +333,27 @@ fillInGrid vg f =
       den <- f $ vec2 (vg.>a * fromIntegral x) (vg.>a * fromIntegral y)
       ((vg.>VG.grid).>writeIOArray) (y * vg.>VG.verticesX + x) den  --TODO point = (0,0)
 
-init reg _win = do
 
-  win <- readIORef _win
+defaultProvider mwin = do
+  win <- mwin.>rr'
+  let height = 16 :: Float
+  let aspect = fromIntegral (win.>windowWidth) / fromIntegral (win.>windowHeight)
+  let width = height * aspect
+  pure $ Just $ Registry.RenderDataProvider (Just $ \ shader _ -> do
+      (shader.>SU.setMat4) "V" (identity n4) False
+      (shader.>SU.setMat4) "P" (Math.Linear.Mat.ortho 0 width 0 height (-1) 1) False
+    ) Nothing Nothing
+
+identityProvider =
+  Just $ Registry.RenderDataProvider (Just $ \ shader _ -> do
+      (shader.>SU.setMat4) "V" (identity n4) False
+      (shader.>SU.setMat4) "P" (identity n4) False
+    ) Nothing Nothing
+
+
+init reg mwin = do
+
+  win <- readIORef mwin
 
   let width = fromIntegral $ win.>windowWidth :: Float
   let height = fromIntegral $ win.>windowHeight :: Float
@@ -352,25 +374,34 @@ init reg _win = do
     rec = Solid.rectangle2 (vec2 8 10.8 |+| offset) (vec2 1 (3 :: Float))
     shape = circle1 `Solid.union` circle2 `Solid.union` rec `Solid.difference` circle3 `Solid.difference` circle4 `Solid.difference` circle5 `Solid.union` rec
 
-  !dat <- timed (\dt -> "fillInGrid: " ++ show dt ++ " ms") $ do
+  dat <- timed (\dt -> "fillInGrid: " ++ show dt ++ " ms") $ do
     fillInGrid grid shape
     makeContour grid shape 32
 
   linesCount <- (dat.>lines).>ArrayBuffer.size
   println $ "generated " ++ show linesCount ++ " lines"
 
-  let triangle = Triangle (vec3  0 height 0) (vec3 width height 0) (vec3 (width/2) 0 0)
+
+  (linesData, _linesRenderer) <- RVF.renderVertFragDefault (pure c_GL_LINES) RVF.vertexSizeColor setAttributePointersColor (pure "color")
+
+
+  ArrayBuffer.mapM_ (\line -> do
+      (linesData.>addLine2) line 0 (vec3 1 1 1)
+    ) (dat.>lines)
+
+
+  linesRenderer.>rw' ! Just _linesRenderer
+
+  let triangle = Triangle (vec3  0 16 0) (vec3 16 16 0) (vec3 8 0 0)
   (dat, _renderer) <- RVF.renderVertFragDefault (pure c_GL_TRIANGLES) RVF.vertexSizeColor setAttributePointersColor (pure "color")
   writeIORef renderer (Just _renderer)
   RVF.addTriangle dat triangle (vec3 1 1 0)
 
   _renderer.>RVF.construct
+  _linesRenderer.>RVF.construct
 
-  (Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationUI _renderer $
-    Just $ Registry.RenderDataProvider (Just $ \ shader _ -> do
-      (shader.>SU.setMat4) "V" (identity n4) False
-      (shader.>SU.setMat4) "P" (identity n4) False
-    ) Nothing Nothing
+  --(Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _renderer $ defaultProvider win
+  (Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _linesRenderer =<< defaultProvider mwin
 
 
 
@@ -378,7 +409,8 @@ init reg _win = do
 
 deinit reg win = do
 
-  (renderer.>readIORef) >>= (\(Just x) -> do x.>RVF.deconstruct;x.>RVF.free)
+  (renderer.>rr')      >>= (\(Just x) -> do x.>RVF.deconstruct;x.>RVF.free)
+  (linesRenderer.>rr') >>= (\(Just x) -> do x.>RVF.deconstruct;x.>RVF.free)
 
   println "core pack deinit !"
 

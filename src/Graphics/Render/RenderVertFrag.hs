@@ -16,6 +16,7 @@ import Foreign.Ptr (Ptr,nullPtr)
 import Control.Monad
 import qualified Language.C.Inline as C
 import qualified Language.C.Inline.Unsafe as UC
+import Math.Geometry.Line2
 
 import Data.IORef
 
@@ -37,11 +38,11 @@ data RenderVertFrag = RenderVertFrag{
 data RenderVertFragDataDefault = RenderVertFragDataDefault{
     vertexPool :: Mem.MemBlock CFloat, --TODO do not forget to free !
     indexPool :: Mem.MemBlock CInt,
-    vertexCount :: Int,
-    vao :: Int,
-    vbo :: Int,
-    ebo :: Int,
-    constructed :: Bool
+    vertexCount :: IORef Int,
+    vao :: IORef Int,
+    vbo :: IORef Int,
+    ebo :: IORef Int,
+    constructed :: IORef Bool
 }
 
 
@@ -61,45 +62,88 @@ setAttributePointersColor = do
 
 --probably move this function to separate module
 addTriangle :: IORef RenderVertFragDataDefault -> Triangle Float -> Vec N3 Float -> IO ()
-addTriangle dat triangle color = do
-  (RenderVertFragDataDefault vp ip vc vao vbo ebo constr) <- readIORef dat
-  vp <- Mem.add vp $ realToFrac(x $ p1 triangle)
-  vp <- Mem.add vp $ realToFrac(y $ p1 triangle)
-  vp <- Mem.add vp $ realToFrac(z $ p1 triangle)
+addTriangle mdat triangle color = do
+  dat <- readIORef mdat
+  let vp = dat.>vertexPool
+  let ip = dat.>indexPool
+  Mem.add vp $ realToFrac(x $ p1 triangle)
+  Mem.add vp $ realToFrac(y $ p1 triangle)
+  Mem.add vp $ realToFrac(z $ p1 triangle)
 
-  vp <- Mem.add vp $ realToFrac $ x color
-  vp <- Mem.add vp $ realToFrac $ y color
-  vp <- Mem.add vp $ realToFrac $ z color
+  Mem.add vp $ realToFrac $ x color
+  Mem.add vp $ realToFrac $ y color
+  Mem.add vp $ realToFrac $ z color
 
-  vp <- Mem.add vp $ realToFrac(x $ p2 triangle)
-  vp <- Mem.add vp $ realToFrac(y $ p2 triangle)
-  vp <- Mem.add vp $ realToFrac(z $ p2 triangle)
+  Mem.add vp $ realToFrac(x $ p2 triangle)
+  Mem.add vp $ realToFrac(y $ p2 triangle)
+  Mem.add vp $ realToFrac(z $ p2 triangle)
 
-  vp <- Mem.add vp $ realToFrac $ x color
-  vp <- Mem.add vp $ realToFrac $ y color
-  vp <- Mem.add vp $ realToFrac $ z color
+  Mem.add vp $ realToFrac $ x color
+  Mem.add vp $ realToFrac $ y color
+  Mem.add vp $ realToFrac $ z color
 
-  vp <- Mem.add vp $ realToFrac(x $ p3 triangle)
-  vp <- Mem.add vp $ realToFrac(y $ p3 triangle)
-  vp <- Mem.add vp $ realToFrac(z $ p3 triangle)
+  Mem.add vp $ realToFrac(x $ p3 triangle)
+  Mem.add vp $ realToFrac(y $ p3 triangle)
+  Mem.add vp $ realToFrac(z $ p3 triangle)
 
-  vp <- Mem.add vp $ realToFrac $ x color
-  vp <- Mem.add vp $ realToFrac $ y color
-  vp <- Mem.add vp $ realToFrac $ z color
+  Mem.add vp $ realToFrac $ x color
+  Mem.add vp $ realToFrac $ y color
+  Mem.add vp $ realToFrac $ z color
 
-  ip <- Mem.add ip 0
-  ip <- Mem.add ip 1
-  ip <- Mem.add ip 2
+  vc <- dat.>vertexCount.>rr' >>= fromIntegral # pure
 
-  writeIORef dat $ RenderVertFragDataDefault vp ip vc vao vbo ebo constr
+  ip <- Mem.add ip vc
+  ip <- Mem.add ip (1 + vc)
+  ip <- Mem.add ip (2 + vc)
+
+  dat.>vertexCount.>rm' ! (+3)
 
   pure ()
+
+
+addLine2 :: IORef RenderVertFragDataDefault -> Line2 Float -> Float -> Vec3 Float -> IO ()
+addLine2 mdat line zLevel color = do
+  dat <- readIORef mdat
+  let vp = dat.>vertexPool
+  let ip = dat.>indexPool
+  vc <- dat.>vertexCount.>rr' >>= fromIntegral # pure
+
+  let _start = line.>start
+  let _end = line.>end
+  (vp.>Mem.add) $ realToFrac (_start.>x)
+  (vp.>Mem.add) $ realToFrac (_start.>y)
+  (vp.>Mem.add) $ realToFrac zLevel
+  (vp.>Mem.add) $ realToFrac (color.>x)
+  (vp.>Mem.add) $ realToFrac (color.>y)
+  (vp.>Mem.add) $ realToFrac (color.>z)
+
+  (vp.>Mem.add) $ realToFrac (_end.>x)
+  (vp.>Mem.add) $ realToFrac (_end.>y)
+  (vp.>Mem.add) $ realToFrac zLevel
+  (vp.>Mem.add) $ realToFrac (color.>x)
+  (vp.>Mem.add) $ realToFrac (color.>y)
+  (vp.>Mem.add) $ realToFrac (color.>z)
+
+  ip <- Mem.add ip vc
+  ip <- Mem.add ip (1 + vc)
+  dat.>vertexCount.>rm' ! (+2)
+
+  pure ()
+
+
+
+
 
 newDefaultData :: IO (IORef RenderVertFragDataDefault)
 newDefaultData = do
   vp <- Mem.new 8 :: IO (Mem.MemBlock CFloat)
   ip <- Mem.new 8 :: IO (Mem.MemBlock CInt)
-  let dat = RenderVertFragDataDefault vp ip 0 0 0 0 False
+  false <- newIORef False
+  vc <- newIORef (0 :: Int)
+  vao <- newIORef (0 :: Int)
+  vbo <- newIORef (0 :: Int)
+  ebo <- newIORef (0 :: Int)
+  let dat = RenderVertFragDataDefault vp ip vc vao vbo ebo false
   newIORef dat
 
 --return data and renderer. CAUTION ! renderer is bind to the data returned (by reference), changing the data changes how rendering occurs
@@ -110,26 +154,34 @@ renderVertFragDefault mode vertSize setAttribPointers shaderName = do
     let
       construct :: IORef RenderVertFragDataDefault -> IO Bool
       construct mdat = do
-          dat@(RenderVertFragDataDefault vp ip vc _ _ _ _) <- readIORef mdat
-          if not $ constructed dat then do
+          dat@(RenderVertFragDataDefault vp ip _ _ _ _ _) <- readIORef mdat
+          const <- (dat.>constructed).>readIORef
+          stored_v <- (vp.>Mem.stored).>readIORef
+          stored_i <- (ip.>Mem.stored).>readIORef
+          ptr_v <- (vp.>Mem.ptr).>readIORef
+          ptr_i <- (ip.>Mem.ptr).>readIORef
+          if not const then do
 
-            vao <- glGenVertexArrays
-            vbo <- glGenBuffers
-            ebo <- glGenBuffers
+            _vao <- glGenVertexArrays >>= dat.>vao.>rw'
+            _vbo <- glGenBuffers >>= dat.>vbo.>rw'
+            _ebo <- glGenBuffers >>= dat.>ebo.>rw'
 
-            glBindVertexArray vao
-            glBindBuffer c_GL_ARRAY_BUFFER vbo
-            glBufferData c_GL_ARRAY_BUFFER (4 * (Mem.stored $ vertexPool dat)) (castPtr $ Mem.ptr $ vertexPool dat) c_GL_STATIC_DRAW
 
-            glBindBuffer c_GL_ELEMENT_ARRAY_BUFFER ebo
-            glBufferData c_GL_ELEMENT_ARRAY_BUFFER (4 * (Mem.stored $ indexPool dat)) (castPtr $ Mem.ptr $ indexPool dat) c_GL_STATIC_DRAW
+            glBindVertexArray _vao
+            glBindBuffer c_GL_ARRAY_BUFFER _vbo
+            glBufferData c_GL_ARRAY_BUFFER (4 * stored_v) (castPtr ptr_v) c_GL_STATIC_DRAW
+
+            glBindBuffer c_GL_ELEMENT_ARRAY_BUFFER _ebo
+            glBufferData c_GL_ELEMENT_ARRAY_BUFFER (4 * stored_i) (castPtr ptr_i) c_GL_STATIC_DRAW
 
 
             setAttribPointers
 
-            --glBindBuffer c_GL_ARRAY_BUFFER 0
-            --glBindVertexArray 0 TODO
-            writeIORef mdat $ RenderVertFragDataDefault vp ip vc vao vbo ebo True
+
+            glBindBuffer c_GL_ARRAY_BUFFER 0
+            glBindVertexArray 0
+
+            dat.>constructed.>rw' ! True
             pure True
           else
             pure False
@@ -137,11 +189,13 @@ renderVertFragDefault mode vertSize setAttribPointers shaderName = do
       deconstruct :: IORef RenderVertFragDataDefault -> IO Bool
       deconstruct mdat = do
         dat@(RenderVertFragDataDefault vp ip vc vao vbo ebo _) <- readIORef mdat
-        if constructed dat then do
-          glDeleteVertexArrays vao
-          glDeleteBuffers vbo
-          glDeleteBuffers ebo
-          writeIORef mdat $ RenderVertFragDataDefault vp ip vc vao vbo ebo False
+        const <- (dat.>constructed).>readIORef
+
+        if const then do
+          vao.>rr' >>= glDeleteVertexArrays
+          vbo.>rr' >>= glDeleteBuffers
+          ebo.>rr' >>= glDeleteBuffers
+          dat.>constructed.>rw' ! False
           pure True
         else
           pure False
@@ -149,10 +203,12 @@ renderVertFragDefault mode vertSize setAttribPointers shaderName = do
       draw :: IORef RenderVertFragDataDefault -> IO Bool
       draw mdat = do
         dat <- readIORef mdat
-        if constructed dat then do
-          glBindVertexArray $ vao dat
+        const <- dat.>constructed.>readIORef
+        stored_i <- dat.>indexPool.>Mem.stored.>readIORef
+        if const then do
+          dat.>vao.>rr' >>= glBindVertexArray
           smode <- mode
-          glDrawElements smode (Mem.stored $ indexPool dat) c_GL_UNSIGNED_INT nullPtr
+          glDrawElements smode stored_i c_GL_UNSIGNED_INT nullPtr
           glBindVertexArray 0
           pure True
         else

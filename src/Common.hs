@@ -6,12 +6,26 @@ import qualified Data.HashTable.IO as H
 import Timer
 import Data.List
 import Data.Array.IO
+import Data.IORef
 
 type HashTable k v = H.BasicHashTable k v --hashtable from hashtables
 
 infixl 0 |>
 (|>) :: a -> (a -> b) -> b
 a |> f = f a
+
+rr' = readIORef   --r for reference
+
+rw' :: IORef a -> a -> IO a
+rw' ref a = do {writeIORef ref a; pure a}
+
+rm' = modifyIORef'
+rn' = newIORef
+
+{-# INLINE rr' #-}
+{-# INLINE rw' #-}
+{-# INLINE rm' #-}
+{-# INLINE rn' #-}
 
 println :: String -> IO ()
 println = putStrLn
@@ -21,11 +35,24 @@ int a = a
 
 --this operator is meant to be used as a record's field accessor
 infixl 9 .>
+{-# INLINE (.>) #-}
 (.>) :: a -> (a -> b) -> b
 (.>) record field = field record
 
+infixl 9 # --flipped (.)
+(#) :: (a -> b) -> (b -> c) -> (a -> c)
+(#) f1 f2 = f2 . f1
+
+infixl 9 ! --just another function application :)
+(!) :: (a -> b) -> a -> b
+(!) f = f
+
+{-# INLINE (#) #-}
+{-# INLINE (!) #-}
+
+
 --experimental
-for :: a -> (a -> Bool) -> (a -> a) -> b -> (a -> b -> IO b ) -> IO b --functional for loop, processing some value at each step, returning the last one
+for :: Int -> (Int -> Bool) -> (Int -> Int) -> b -> (Int -> b -> IO b ) -> IO b --functional for loop, processing some value at each step, returning the last one
 for val pred step initial body
     | pred val = do
         res <- body val initial

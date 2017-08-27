@@ -14,9 +14,9 @@ data VoxelGrid2 a = VoxelGrid2{
 }
 
 
-mkGrid :: a -> Int -> Int -> IO (VoxelGrid2 a)
+mkGrid :: (Num a) => a -> Int -> Int -> IO (VoxelGrid2 a) --TODO initialization
 mkGrid a sizeX sizeY = do
-  grid <- newArray_ (0, (sizeX + 1) * (sizeY + 1) - 1)
+  grid <- newArray (0, (sizeX + 1) * (sizeY + 1) - 1) 0
   pure $ VoxelGrid2 a sizeX sizeY grid
 
 verticesX grid = grid.>sizeX + 1
@@ -40,6 +40,6 @@ foreachVertex vg fun =
 
 square2 :: (Floating a) => VoxelGrid2 a -> Int -> Int -> Square2 a
 square2 vg x y =
-  let center = vec2 (fromIntegral x + 0.5 * (vg.>a)) (fromIntegral y + 0.5 * (vg.>a))
+  let center = vec2 ((fromIntegral x + 0.5) * (vg.>a)) ((fromIntegral y + 0.5) * (vg.>a))
   in
     Square2 center (vg.>a / 2)

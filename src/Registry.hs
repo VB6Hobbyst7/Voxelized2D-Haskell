@@ -104,7 +104,7 @@ _pushImpl lifetime transform render maybeProvider =
           case provider.>applyShaderData of
             (Just applicable) -> pure applicable
             Nothing -> pure defaultProvider
-
+        Nothing -> pure defaultProvider
 
       lcombinedProvider <- case transform of
         RenderTransformationUI ->

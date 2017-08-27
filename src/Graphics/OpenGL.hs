@@ -16,6 +16,7 @@ import qualified Memory.MemBlock as Mem
 import Math.Nat
 import Data.Monoid ((<>))
 import Foreign.Ptr(FunPtr, freeHaskellFunPtr)
+import Data.IORef
 
 type GLFWmousebuttonfun = Ptr () -> CInt -> CInt -> CInt -> IO ()
 type GLFWkeyfun = Ptr () -> CInt -> CInt -> CInt -> CInt -> IO ()
@@ -231,7 +232,8 @@ glUniformMatrix4fv uniform transpose mat = do
   let c1 = fromIntegral uniform :: CInt
   let c2 = if transpose then 1 else 0 :: CChar
   mem <- Mem.new 16 :: IO (Mem.MemBlock CFloat)
-  mem@(Mem.MemBlock _ ptr _) <- Mat.foreach (\ v mem -> Mem.add mem $ realToFrac v) mat mem
+  mem@(Mem.MemBlock _ mptr _) <- Mat.foreach (\ v mem -> Mem.add mem $ realToFrac v) mat mem
+  ptr <- readIORef mptr
   !_ <- [C.exp|void{glUniformMatrix4fv ( $(int c1), 1, $(char c2),  $(float* ptr)) }|]
   Mem.delete mem
 
