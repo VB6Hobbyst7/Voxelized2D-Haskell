@@ -1,6 +1,9 @@
 profiling
 keep watching https://ghc.haskell.org/trac/ghc/wiki/Records/OverloadedRecordFields
 
+optimizations:
+https://wiki.haskell.org/Inlining_and_Specialisation
+
 
 FIX FREAKING (>) (<) signs flipped in IO cfor
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE Strict #-}
+{-# LANGUAGE Strict,TypeApplications #-}
 
 module Pack.CorePack where
 
@@ -23,13 +23,13 @@ import qualified Memory.ArrayBuffer as ArrayBuffer
 import Memory.ArrayBuffer(ArrayBuffer(..))
 import Math.Geometry.Line2
 import Math.Geometry.Square2
-import TypeClass.Vector
 import qualified Memory.VoxelGrid2 as VG
 import Memory.VoxelGrid2(VoxelGrid2(..))
 import GHC.IOArray
 import Data.Bits
 import qualified Math.Geometry.SShape2 as Solid
 import Math.Geometry.SShape2(DenFun)
+import Data.Singletons.TypeLits
 
 name = "CorePack"
 version = "0.0.1"
@@ -180,7 +180,7 @@ makeVertex vg tr x y f accuracy features outIntersections outExtra = do
           let full = if p_a <= 0 then v_a else v_b
           --TODO render intersection
           dir <- sampleTangent (Square2 ip _extForNormal) accuracy f
-          let line = Line2 (ip |-| dir |/ _extForNormal) (ip |+| dir |/ _extForNormal)
+          let line = Line2 (ip |-| dir |* (1 /  _extForNormal)) (ip |+| dir |* (1 /  _extForNormal))
           (tangents.>ArrayBuffer.push) line
           (outIntersections.>ArrayBuffer.push) ip
           (outExtra.>ArrayBuffer.push) full
@@ -340,14 +340,14 @@ defaultProvider mwin = do
   let aspect = fromIntegral (win.>windowWidth) / fromIntegral (win.>windowHeight)
   let width = height * aspect
   pure $ Just $ Registry.RenderDataProvider (Just $ \ shader _ -> do
-      (shader.>SU.setMat4) "V" (identity n4) False
+      (shader.>SU.setMat4) "V" (identity (SNat @4)) False
       (shader.>SU.setMat4) "P" (Math.Linear.Mat.ortho 0 width 0 height (-1) 1) False
     ) Nothing Nothing
 
 identityProvider =
   Just $ Registry.RenderDataProvider (Just $ \ shader _ -> do
-      (shader.>SU.setMat4) "V" (identity n4) False
-      (shader.>SU.setMat4) "P" (identity n4) False
+      (shader.>SU.setMat4) "V" (identity (SNat @4)) False
+      (shader.>SU.setMat4) "P" (identity (SNat @4)) False
     ) Nothing Nothing
 
 
@@ -378,6 +378,7 @@ init reg mwin = do
     fillInGrid grid shape
     makeContour grid shape 32
 
+  
   linesCount <- (dat.>lines).>ArrayBuffer.size
   println $ "generated " ++ show linesCount ++ " lines"
 
@@ -404,7 +405,7 @@ init reg mwin = do
   (Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _linesRenderer =<< defaultProvider mwin
 
 
-
+  
   println "core pack init !"
 
 deinit reg win = do

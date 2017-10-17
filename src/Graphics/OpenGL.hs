@@ -227,12 +227,12 @@ glUniform4f uniform val1 val2 val3 val4 = do
   let c5 = realToFrac val4 :: CFloat
   [C.exp|void{glUniform4f ( $(int c1), $(float c2), $(float c3), $(float c4) , $(float c5)) }|]
 
-glUniformMatrix4fv :: Int -> Bool -> Mat N4 N4 Float -> IO ()
+glUniformMatrix4fv :: Int -> Bool -> Mat 4 4 Float -> IO ()
 glUniformMatrix4fv uniform transpose mat = do
   let c1 = fromIntegral uniform :: CInt
   let c2 = if transpose then 1 else 0 :: CChar
   mem <- Mem.new 16 :: IO (Mem.MemBlock CFloat)
-  mem@(Mem.MemBlock _ mptr _) <- Mat.foreach (\ v mem -> Mem.add mem $ realToFrac v) mat mem
+  mem@(Mem.MemBlock _ mptr _) <- Mat.mpforeach (\ v mem -> Mem.add mem $ realToFrac v) mat mem
   ptr <- readIORef mptr
   !_ <- [C.exp|void{glUniformMatrix4fv ( $(int c1), 1, $(char c2),  $(float* ptr)) }|]
   Mem.delete mem

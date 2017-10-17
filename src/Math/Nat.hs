@@ -1,38 +1,40 @@
+{-#LANGUAGE
+TypeInType,
+GADTs,
+TypeOperators,
+DataKinds,
+TemplateHaskell,
+TypeFamilies,
+UndecidableInstances,
+ScopedTypeVariables,
+TypeFamilies,
+KindSignatures,
+FlexibleContexts,
+RankNTypes,
+FlexibleInstances,
+InstanceSigs,
+DefaultSignatures,
+AllowAmbiguousTypes,
+StandaloneDeriving,
+TypeApplications
+#-}
+
 module Math.Nat where
 
 import Data.Proxy
+import Data.Singletons.TypeLits
+import GHC.TypeLits ( type (<=), type (-) )
+import Data.Type.Equality
+import Unsafe.Coerce
+import Data.Singletons.Decide
 
-data Nat = Zero | Succ Nat
 
-type N0 = Zero
-type N1 = Succ Zero
-type N2 = Succ N1
-type N3 = Succ N2
-type N4 = Succ N3
+data IsZero (n :: Nat)
+  where Zero :: (0 ~ n) => IsZero n
+        NonZero :: (1 <= n) => IsZero n
+deriving instance Show (IsZero n)
 
-n0 = Z
-n1 = S n0
-n2 = S n1
-n3 = S n2
-n4 = S n3
-n5 = S n4
-
-data SNat n where
-  Z :: SNat Zero
-  S :: SNat n -> SNat (Succ n)
-
-(%:+) :: SNat n -> SNat m -> SNat (n + m)
-Z   %:+ m = m
-S n %:+ m = S (n %:+ m)
-
-(%:-) :: SNat n -> SNat m -> SNat (n - m)
-n   %:- Z = n
-(S n) %:- S m = n %:- m
-
-type family (+) (n :: Nat) (m :: Nat) :: Nat
-type instance (+) Zero m = m
-type instance (+) (Succ n) m = Succ ((+) n m) -- ... = Succ (Plus m n) would not work
-
-type family (-) (n :: Nat) (m :: Nat) :: Nat
-type instance (-) n Zero = n
-type instance (-) (Succ n) (Succ m) = (-) n m
+isZero :: forall n. SNat n -> IsZero n
+isZero n = case n %~ (SNat @0) of
+  Proved Refl -> Zero
+  Disproved _ -> unsafeCoerce (NonZero @1)

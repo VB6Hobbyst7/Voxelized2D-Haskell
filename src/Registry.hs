@@ -1,4 +1,4 @@
-
+{-#LANGUAGE TypeApplications#-}
 
 module Registry where
 
@@ -18,6 +18,7 @@ import Data.Typeable
 import Common
 import Math.Linear.Mat
 import qualified Math.Nat as Nat
+import Data.Singletons.TypeLits
 
 lifetimeOneDrawRenderers :: IORef (HashTable Int ( RenderVertFrag, RenderDataProvider) )
 {-# NOINLINE lifetimeOneDrawRenderers #-}
@@ -110,7 +111,7 @@ _pushImpl lifetime transform render maybeProvider =
         RenderTransformationUI ->
           pure $ \shader win -> do
             (shader.>SU.setMat4) "P" (ortho 0 (fromIntegral $ win.>windowWidth) (fromIntegral $ win.>windowHeight) 0 (-1) 1 ) False
-            (shader.>SU.setMat4) "V" (identity Nat.n4) False
+            (shader.>SU.setMat4) "V" (identity (SNat @4)) False
 
         RenderTransformationNone -> pure providerByUser
         _ -> throw UnsupportedRenderTransformationException

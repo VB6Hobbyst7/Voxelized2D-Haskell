@@ -35,7 +35,7 @@ disable shader@(Shader id) = do
   else do glUseProgram 0
           pure True
 
-setMat4 :: Shader -> String -> Mat N4 N4 Float -> Bool -> IO ()
+setMat4 :: Shader -> String -> Mat 4 4 Float -> Bool -> IO ()
 setMat4 (Shader id) name mat transpose = do
   loc <- glGetUniformLocation id name
   glUniformMatrix4fv loc transpose mat

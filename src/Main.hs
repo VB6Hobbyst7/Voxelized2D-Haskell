@@ -1,3 +1,5 @@
+{-#LANGUAGE TypeApplications#-}
+
 module Main where
 
 import Prelude hiding (length)
@@ -20,8 +22,8 @@ import System.Directory
 import Math.Linear.Mat
 import qualified Math.Linear.Mat as Mat
 import Math.Nat
-import TypeClass.Vector
 import Math.Linear.Vec
+import qualified Math.Linear.Vec as Vec
 import Timer
 import Common
 import Math.Geometry.Triangle
@@ -43,6 +45,9 @@ import qualified Memory.ArrayBuffer as ArrayBuffer
 import Memory.ArrayBuffer (ArrayBuffer)
 import Data.Maybe
 import Data.Global
+import Data.Singletons.TypeLits
+import Math.Collision
+import Math.Geometry.Line2
 
 name = "Haskell-Voxelized2D"
 
@@ -240,8 +245,8 @@ sysTerminate shaders = do
 
   pure ()
 
-main :: IO ()
-main = do
+runVoxelized :: IO ()
+runVoxelized = do
   (shaders,registry) <- sysInit
 
   --add core pack
@@ -254,6 +259,16 @@ main = do
   sysUnloadPacks shaders registry
 
   sysTerminate shaders
+
+
+main :: IO ()
+main = do
+
+  --testVec
+  runVoxelized
+  
+
+
 
 
 --callbacks

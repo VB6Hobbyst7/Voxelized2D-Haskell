@@ -20,38 +20,53 @@ AllowAmbiguousTypes
 
 module Math.Linear.Vec where
 
---import Math.Nat
-import TypeClass.Vector
-import TypeClass.Append
+import Math.Nat
+
 import Common
 
 import Data.Singletons
 import Data.Singletons.Prelude
 import Data.Singletons.TypeLits
 import Unsafe.Coerce
+import Data.Kind
+import Data.Type.Equality
+import Data.Singletons.Prelude.Enum
 
-infixr 8 :>
-data  Vec :: Nat -> * -> * where   --same as : data List (n :: Nat) a where ...
-  Nil :: Vec Zero a
-  (:>) :: a -> Vec n a -> Vec (Succ n) a
+
 
 class UVec a where
   data Vec (n :: Nat) a :: *
 
-  --slow:
-  vnil :: Vec 0 a
-  vcons :: a -> Vec n a -> Vec (n :+ 1) a
-
-  vnonEmpty :: Vec n a -> Either (n :~: (m :+ 1)) (n :~: 0)
-  vmatch :: Vect (n :+ 1) a -> (a, Vec n a)
   
+  vnil :: Vec 0 a
+  vcons :: a -> Vec (n :- 1) a -> Vec (n) a
+
+
+  --slow(direct pattern matching is faster)
+  vnonEmpty :: Vec n a -> Either (n :~: (m :+ 1)) (n :~: 0)
+  vmatch :: Vec (n :+ 1) a -> (a, Vec n a)
+
+
+instance (UVec a) => UVec (Vec m a) where
+  data Vec n (Vec m a) where
+    VNilVec :: Vec 0 (Vec m a)
+    VConsVec :: Vec m a -> Vec (n :- 1) (Vec m a) ->
+      Vec n (Vec m a)
+
+  vnil = VNilVec
+  vcons = VConsVec
+
+  vnonEmpty (VConsVec x xs) = unsafeCoerce $ Left Refl
+  vnonEmpty VNilVec = Right Refl
+
+  vmatch (VConsVec x xs) = unsafeCoerce (x,xs)
 
 instance UVec Float where
   data Vec n Float where
     VNilFloat :: Vec 0 Float
     VConsFloat :: {-#UNPACK#-}!Float ->
-                              Vec n Float ->
-                              Vec (n :+ 1) Float
+                              Vec (n :- 1) Float ->
+                              Vec (n) Float
 
 
   vnil = VNilFloat
@@ -60,7 +75,7 @@ instance UVec Float where
   vnonEmpty (VConsFloat x xs) = unsafeCoerce $ Left Refl
   vnonEmpty VNilFloat = Right Refl
 
-  vmatch (VConsFloat x xs) = (x, xs)
+  vmatch (VConsFloat x xs) = unsafeCoerce (x, xs)
 
 infixl 4 |+|
 infixl 4 |-|
@@ -70,6 +85,7 @@ infixr 6 *|
 --infixr 6 /|
 infixl 6 |*|
 
+  
 class (UVec a) => AlgVec a where
   (|+|) :: (Num a) => Vec n a -> Vec n a -> Vec n a
   (|-|) :: (Num a) => Vec n a -> Vec n a -> Vec n a
@@ -80,7 +96,7 @@ class (UVec a) => AlgVec a where
   smag  :: (Num a) => Vec n a -> a
   smag x = dot x x
   mag   :: (Floating a) => Vec n a -> a
-  mag x = sqrt $ mag x
+  mag x = sqrt $ smag x
   cross :: (Num a) => Vec 3 a -> Vec 3 a -> Vec 3 a
   ortho :: (Num a) => Vec 2 a -> Vec 2 a
 
@@ -111,6 +127,7 @@ instance AlgVec Float where
     (k * y) `VConsFloat` (k *| ys)
   k *| VNilFloat = VNilFloat
 
+  (|*|) :: Vec n Float -> Vec n Float -> Vec n Float
   (x `VConsFloat` xs) |*| (y `VConsFloat` ys) =
     (x * y) `VConsFloat` (xs |*| ys)
   VNilFloat |*| VNilFloat = VNilFloat
@@ -118,11 +135,11 @@ instance AlgVec Float where
   (VConsFloat u1 (VConsFloat u2 (VConsFloat u3 VNilFloat)))
     `cross` (VConsFloat v1 (VConsFloat v2 (VConsFloat v3 VNilFloat))) =
     (u2 * v3 - u3 * v2) `VConsFloat`
-    (u3 * v1 - u1 * v3) `VConsFloat`
-    (u1 * v2 - u2 * v1) `VConsFloat` VNilFloat
+    ((u3 * v1 - u1 * v3) `VConsFloat`
+    ((u1 * v2 - u2 * v1) `VConsFloat` VNilFloat))
 
 
-  ortho (VConsFloat x (VConsFloat y VNilFloat) =
+  ortho (VConsFloat x (VConsFloat y VNilFloat)) =
          VConsFloat (-y) (VConsFloat x VNilFloat)
 
   x (VConsFloat a _) = a
@@ -139,29 +156,31 @@ type Vec3F = Vec3 Float
 type Vec4F = Vec4 Float
 
 --polimorphic replicate
-{-vpreplicate :: SNat n -> a -> Vec n a
-vpreplicate (S n) val = val :> vpreplicate n val
-vpreplicate Z _ = Nil-}
+vpreplicate :: (UVec a) => SNat n -> a -> Vec n a
+vpreplicate n val = case isZero n of
+  NonZero -> val `vcons` vpreplicate (sPred n) val
+  Zero -> vnil
 
 
-vpforeach :: (a -> b -> IO b) -> Vec n a -> b -> IO b
+
+vpforeach :: (UVec a) => (a -> b -> IO b) -> Vec n a -> b -> IO b
 vpforeach f v b =
     case vnonEmpty v of
       Left Refl -> do
         let (a,as) = vmatch v
         r <- f a b
         vpforeach f as r
-      Right Refl -> b
+      Right Refl -> pure b
 
 
-vec2 :: a -> a -> Vec N2 a
-vec2 a b = a :> b :> Nil
+vec2 :: (UVec a) => a -> a -> Vec 2 a
+vec2 a b = vcons a (vcons b vnil)
 
-vec3 :: a -> a -> a -> Vec N3 a
-vec3 a b c = a :> b :> c :> Nil
+vec3 :: (UVec a) => a -> a -> a -> Vec 3 a
+vec3 a b c = vcons a (vcons b (vcons c vnil))
 
-vec4 :: a -> a -> a -> a -> Vec N4 a
-vec4 a b c d = a :> b :> c :> d :> Nil
+vec4 :: (UVec a) => a -> a -> a -> a -> Vec 4 a
+vec4 a b c d = vcons a (vcons b (vcons c (vcons d vnil)))
 
 
 

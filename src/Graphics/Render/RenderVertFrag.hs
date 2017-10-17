@@ -61,7 +61,7 @@ setAttributePointersColor = do
 
 
 --probably move this function to separate module
-addTriangle :: IORef RenderVertFragDataDefault -> Triangle Float -> Vec N3 Float -> IO ()
+addTriangle :: IORef RenderVertFragDataDefault -> Triangle Float -> Vec 3 Float -> IO ()
 addTriangle mdat triangle color = do
   dat <- readIORef mdat
   let vp = dat.>vertexPool
