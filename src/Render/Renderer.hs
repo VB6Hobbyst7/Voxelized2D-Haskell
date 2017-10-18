@@ -34,7 +34,7 @@ drawUI _windowInfo shaders = do
   windowInfo <- readIORef _windowInfo
   --lifetime : one draw
   (Just onetime) <- readIORef Reg.lifetimeOneDrawRenderers
-  H.mapM_ (\(_,val) -> do -- == foreach do
+  ArrayBuffer.mapM_ (\val -> do -- == foreach do
     let render = fst val
     name <- render.>shaderName
     (Just shader) <- (H.lookup) shaders name
@@ -69,8 +69,8 @@ drawUI _windowInfo shaders = do
 
     ) onetime
 
-  newTable <- H.new
-  writeIORef Reg.lifetimeOneDrawRenderers (Just newTable) --reset the table after rendering
+  newBuffer <- ArrayBuffer.new 8
+  writeIORef Reg.lifetimeOneDrawRenderers (Just newBuffer) --reset the table after rendering
 
   --lifetime : manual
 

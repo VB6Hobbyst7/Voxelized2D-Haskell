@@ -183,7 +183,7 @@ initRegistry = do
       ArrayBuffer.push updateCallbacks fun
       pure ()
 
-  n1 <- H.new
+  n1 <- ArrayBuffer.new 8
   n2 <- ArrayBuffer.new 8
   rw' Reg.lifetimeOneDrawRenderers (Just n1)
   rw' Reg.lifetimeManualRenderers (Just n2)

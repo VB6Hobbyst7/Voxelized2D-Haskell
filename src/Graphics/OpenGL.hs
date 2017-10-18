@@ -140,7 +140,8 @@ glfwCreateWindow width height name = let
          do
             n <- ion
             let !ret = [C.exp|void*{glfwCreateWindow($(int w), $(int h), $(char* n), NULL, NULL)}|]
-            free n
+            --free n looks like OpenGL should do this automatically
+            --true ?
             ret
 
 

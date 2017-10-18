@@ -5,7 +5,7 @@ module Registry where
 import qualified Data.Vector.Mutable as Vector
 import Foreign.Ptr
 import Memory.ArrayBuffer(ArrayBuffer(..))
-import qualified Memory.ArrayBuffer as AB
+import qualified Memory.ArrayBuffer as ArrayBuffer
 import Graphics.OpenGL(GLFWkeyfun, GLFWmousebuttonfun)
 import qualified Data.HashTable.IO as H
 import Graphics.Shader.ShaderUtils(Shader(..))
@@ -22,6 +22,7 @@ import qualified Math.Nat as Nat
 import Data.Singletons.TypeLits
 import Data.Global
 
+--TODO not used anymore
 declareIORef "currentRenderId"
   [t|Int|]
   [e|0|]
@@ -56,12 +57,12 @@ data Registry = Registry {
 }
 
 data Render = Render{
-  push :: RenderLifetime -> RenderTranformation -> RenderVertFrag -> Maybe RenderDataProvider -> IO Int
+  push :: RenderLifetime -> RenderTranformation -> RenderVertFrag -> Maybe RenderDataProvider -> IO ()
 }
 
 
 declareIORef "lifetimeOneDrawRenderers"
-  [t| Maybe (HashTable Int (RenderVertFrag, RenderDataProvider))|]
+  [t| Maybe (ArrayBuffer Int (RenderVertFrag, RenderDataProvider))|]
   [e| Nothing|]
 
 declareIORef "lifetimeManualRenderers"
@@ -84,7 +85,7 @@ instance Show UnsupportedRenderTransformationException where
 instance Exception UnsupportedRenderTransformationException
 
 
-_pushImpl :: RenderLifetime -> RenderTranformation -> RenderVertFrag -> Maybe RenderDataProvider -> IO Int
+_pushImpl :: RenderLifetime -> RenderTranformation -> RenderVertFrag -> Maybe RenderDataProvider -> IO ()
 _pushImpl lifetime transform render maybeProvider =
   case lifetime of
     RenderLifetimeOneDraw -> proceed
@@ -93,7 +94,7 @@ _pushImpl lifetime transform render maybeProvider =
   where
     
     defaultProvider shader widnowInfo = pure () --default provider
-    proceed :: IO Int
+    proceed :: IO ()
     proceed = do
       lapplyPreRenderState <- newIORef (Nothing :: Maybe ApplyPreRenderState)
       lapplyPostRenderState <- newIORef (Nothing :: Maybe ApplyPostRenderState)
@@ -117,8 +118,8 @@ _pushImpl lifetime transform render maybeProvider =
         RenderTransformationNone -> pure providerByUser
         _ -> throw UnsupportedRenderTransformationException
 
-      id <- (+1) <$> readIORef currentRenderId
-      writeIORef currentRenderId id
+      --id <- (+1) <$> readIORef currentRenderId
+      --writeIORef currentRenderId id
 
       pre <- readIORef lapplyPreRenderState
       post <- readIORef lapplyPostRenderState
@@ -133,11 +134,13 @@ _pushImpl lifetime transform render maybeProvider =
       case lifetime of
         RenderLifetimeOneDraw -> do
           (Just oneDraw) <- readIORef lifetimeOneDrawRenderers
-          (oneDraw.>H.insert) id (render,newProvider)
+          (oneDraw.>ArrayBuffer.push)  (render,newProvider)
+
+          pure ()
         RenderLifetimeManual -> do
           (Just manual) <- readIORef lifetimeManualRenderers
-          (manual.>AB.push) (render,newProvider)
+          (manual.>ArrayBuffer.push) (render,newProvider)
 
           pure ()
           
-      pure id
+      pure ()
