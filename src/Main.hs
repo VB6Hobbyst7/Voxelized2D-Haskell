@@ -183,6 +183,11 @@ initRegistry = do
       ArrayBuffer.push updateCallbacks fun
       pure ()
 
+  n1 <- H.new
+  n2 <- ArrayBuffer.new 8
+  rw' Reg.lifetimeOneDrawRenderers (Just n1)
+  rw' Reg.lifetimeManualRenderers (Just n2)
+  
   let reg = Registry addPack addKeyCallback addMouseCallback addUpdateCallback
   let lPackData = PackData packs keyCallbacks mouseCallbacks updateCallbacks
   writeIORef packData $ Just lPackData
@@ -227,9 +232,35 @@ sysRun shaders registry = do
 
        sysUpdate shaders registry
 
+
+
        Renderer.sysDraw windowInfo shaders
 
+
+       
+       {-glClear c_GL_COLOR_BUFFER_BIT
+       glClearColor 0 1 0 1
+
+       let tr =
+             Triangle (vec3 (-1) (-1) 0) (vec3 1 0 0) (vec3 0 1 0)
+       (dat,ren) <- renderVertFragDefault (pure c_GL_TRIANGLES)
+         vertexSizeColor setAttributePointersColor (pure "color")
+       addTriangle dat tr (vec3 1 1 0)
+       construct ren
+       (Just shader) <- H.lookup shaders "color"
+       enable shader
+       setMat4 shader "P" (identity (SNat @4)) False
+       setMat4 shader "V" (identity (SNat @4)) False
+       draw ren
+       deconstruct ren
+       --free ren
+       glfwSwapBuffers $ windowId _win -}
+
+
        glfwPollEvents
+
+       
+       
        return w
 
   pure ()

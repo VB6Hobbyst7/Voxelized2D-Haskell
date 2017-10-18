@@ -385,6 +385,7 @@ init reg mwin = do
 
   (linesData, _linesRenderer) <- RVF.renderVertFragDefault (pure c_GL_LINES) RVF.vertexSizeColor setAttributePointersColor (pure "color")
 
+  
 
   ArrayBuffer.mapM_ (\line -> do
       (linesData.>addLine2) line 0 (vec3 1 1 1)
@@ -393,7 +394,7 @@ init reg mwin = do
 
   linesRenderer.>rw' ! Just _linesRenderer
 
-  let triangle = Triangle (vec3  0 16 0) (vec3 16 16 0) (vec3 8 0 0)
+  let triangle = Triangle (vec3  0 0 0) (vec3 1 0 0) (vec3 0 1 0)
   (dat, _renderer) <- RVF.renderVertFragDefault (pure c_GL_TRIANGLES) RVF.vertexSizeColor setAttributePointersColor (pure "color")
   writeIORef renderer (Just _renderer)
   RVF.addTriangle dat triangle (vec3 1 1 0)
@@ -401,7 +402,9 @@ init reg mwin = do
   _renderer.>RVF.construct
   _linesRenderer.>RVF.construct
 
-  --(Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _renderer $ defaultProvider win
+  --(Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _renderer identityProvider
+
+  
   (Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _linesRenderer =<< defaultProvider mwin
 
 

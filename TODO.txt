@@ -4,6 +4,8 @@ keep watching https://ghc.haskell.org/trac/ghc/wiki/Records/OverloadedRecordFiel
 optimizations:
 https://wiki.haskell.org/Inlining_and_Specialisation
 
+check performance of c loops and other common use structures
+
 
 FIX FREAKING (>) (<) signs flipped in IO cfor
 

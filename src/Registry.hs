@@ -5,6 +5,7 @@ module Registry where
 import qualified Data.Vector.Mutable as Vector
 import Foreign.Ptr
 import Memory.ArrayBuffer(ArrayBuffer(..))
+import qualified Memory.ArrayBuffer as AB
 import Graphics.OpenGL(GLFWkeyfun, GLFWmousebuttonfun)
 import qualified Data.HashTable.IO as H
 import Graphics.Shader.ShaderUtils(Shader(..))
@@ -19,24 +20,12 @@ import Common
 import Math.Linear.Mat
 import qualified Math.Nat as Nat
 import Data.Singletons.TypeLits
+import Data.Global
 
-lifetimeOneDrawRenderers :: IORef (HashTable Int ( RenderVertFrag, RenderDataProvider) )
-{-# NOINLINE lifetimeOneDrawRenderers #-}
-lifetimeOneDrawRenderers =
-  unsafePerformIO $ do
-    table <- H.new
-    newIORef table
+declareIORef "currentRenderId"
+  [t|Int|]
+  [e|0|]
 
-lifetimeManualRenderers :: IORef (HashTable Int ( RenderVertFrag, RenderDataProvider) )
-{-# NOINLINE lifetimeManualRenderers #-}
-lifetimeManualRenderers =
-  unsafePerformIO $ do
-    table <- H.new
-    newIORef table
-
-currentRenderId :: IORef Int
-{-# NOINLINE currentRenderId #-}
-currentRenderId = unsafePerformIO (newIORef 0)
 
 data RenderLifetime = RenderLifetimeOneDraw | RenderLifetimeManual
 data RenderTranformation = RenderTransformationNone | RenderTransformationUI | RenderTransformationWorld
@@ -57,6 +46,8 @@ data RenderDataProvider = RenderDataProvider {
   applyPostRenderState :: Maybe ApplyPostRenderState
 }
 
+
+
 data Registry = Registry {
   addPack :: Pack -> IO (),
   addKeyCallback :: GLFWkeyfun -> IO (),
@@ -67,6 +58,15 @@ data Registry = Registry {
 data Render = Render{
   push :: RenderLifetime -> RenderTranformation -> RenderVertFrag -> Maybe RenderDataProvider -> IO Int
 }
+
+
+declareIORef "lifetimeOneDrawRenderers"
+  [t| Maybe (HashTable Int (RenderVertFrag, RenderDataProvider))|]
+  [e| Nothing|]
+
+declareIORef "lifetimeManualRenderers"
+  [t|Maybe (ArrayBuffer Int (RenderVertFrag, RenderDataProvider))|]
+  [e|Nothing|]
 
 renderer :: Render
 renderer = Render _pushImpl
@@ -91,6 +91,7 @@ _pushImpl lifetime transform render maybeProvider =
     RenderLifetimeManual  -> proceed
     _                     -> throw UnsupportedRenderLifetimeException
   where
+    
     defaultProvider shader widnowInfo = pure () --default provider
     proceed :: IO Int
     proceed = do
@@ -127,12 +128,16 @@ _pushImpl lifetime transform render maybeProvider =
 
       let newProvider = RenderDataProvider (Just lcombinedProvider) pre post
 
+
+      --try change Hashmap to regular IO Vector
       case lifetime of
         RenderLifetimeOneDraw -> do
-          oneDraw <- readIORef lifetimeOneDrawRenderers
+          (Just oneDraw) <- readIORef lifetimeOneDrawRenderers
           (oneDraw.>H.insert) id (render,newProvider)
         RenderLifetimeManual -> do
-          manual <- readIORef lifetimeManualRenderers
-          (manual.>H.insert) id (render,newProvider)
+          (Just manual) <- readIORef lifetimeManualRenderers
+          (manual.>AB.push) (render,newProvider)
 
+          pure ()
+          
       pure id
