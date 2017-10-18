@@ -80,8 +80,8 @@ sampleQEF square n lines = do
   let min = (square.>center) |-| ext
   bestQEF <- newIORef placeholderHugeF --TODO placeholder
   bestPoint <- newIORef min
-  cfor 0 (pure $ (>) n) (+1) $ \i ->
-    cfor 0 (pure $ (>) n) (+1) $ \j -> do
+  cfor' 0 (< n) (+1) $ \i ->
+    cfor' 0 (< n) (+1) $ \j -> do
       let point = min |+| ext |*| vec2 ((2 * fromIntegral i + 1) / fromIntegral n) ((2 * (fromIntegral j) + 1) / fromIntegral n)
       qef <- calcQEF point lines
       curQEF <- readIORef bestQEF
@@ -101,7 +101,7 @@ sampleIntersection line n f = do
   bestAbs <- newIORef placeholderHugeF
   bestPoint <- newIORef (Nothing :: Maybe (Vec2 Float))
 
-  cfor 0 (pure $ (>) n) (+1) $ \i -> do
+  cfor' 0 (< n) (+1) $ \i -> do
     let point = (line.>start) |+| ext |* (fromIntegral i / fromIntegral n)
     den <- f point
     let _abs = abs den
@@ -127,8 +127,8 @@ sampleTangent square n f = do
   closest <- newIORef (denAtCenter + placeholderHugeF)
   closestPoint <- newIORef (square.>center)
 
-  cfor 0 (pure $ (>) n) (+1) $ \i ->
-    cfor 0 (pure $ (>) n) (+1) $ \j -> do
+  cfor' 0 (< n) (+1) $ \i ->
+    cfor' 0 (< n) (+1) $ \j -> do
       let point = min |+| ext |*| vec2 (2 * fromIntegral i / fromIntegral n) (2 * fromIntegral j / fromIntegral n)
       den <- f point
       let attempt = abs (den - denAtCenter)
@@ -201,7 +201,7 @@ makeVertex vg tr x y f accuracy features outIntersections outExtra = do
 
     interpolatedVertex <- sampleQEF ((vg.>VG.square2) x y) accuracy tangents
 
-    cfor 0 ((>) <$> (outIntersections.>ArrayBuffer.size) ) (+1) $ \i -> do
+    cfor 0 (\ i -> pure (i <) <*> (outIntersections.>ArrayBuffer.size) ) (+1) $ \i -> do
       _p1 <- (outIntersections.>ArrayBuffer.read) i
       _p2 <- (outExtra.>ArrayBuffer.read) i
       (tr.>ArrayBuffer.push) $ Triangle2 interpolatedVertex _p1 _p2
@@ -253,8 +253,8 @@ makeContour vg f accuracy = do
             _ -> pure ()
           pure ret
 
-  cfor 0 (pure $ (>) (vg.>VG.sizeY)) (+1) $ \y ->
-    cfor 0 (pure $ (>) (vg.>VG.sizeX)) (+1) $ \x -> do
+  cfor' 0 (< (vg.>VG.sizeY)) (+1) $ \y ->
+    cfor' 0 (< (vg.>VG.sizeX)) (+1) $ \x -> do
       p0 <- (vg.>VG.get) x y
       p1 <- (vg.>VG.get) (x+1) y
       p2 <- (vg.>VG.get) x (y+1)
@@ -328,8 +328,8 @@ makeContour vg f accuracy = do
 
 fillInGrid :: VoxelGrid2 Float -> DenFun Float -> IO ()
 fillInGrid vg f =
- cfor 0 ( pure (< vg.>VG.verticesY) ) (+1) $ \ y ->
-    cfor 0 (pure (< vg.>VG.verticesX) ) (+1) $ \ x -> do
+ cfor' 0 ( < vg.>VG.verticesY ) (+1) $ \ y ->
+    cfor' 0 (< vg.>VG.verticesX ) (+1) $ \ x -> do
       den <- f $ vec2 (vg.>a * fromIntegral x) (vg.>a * fromIntegral y)
       ((vg.>VG.grid).>writeIOArray) (y * vg.>VG.verticesX + x) den  --TODO point = (0,0)
 

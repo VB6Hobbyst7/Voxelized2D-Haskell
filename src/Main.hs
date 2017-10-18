@@ -197,7 +197,7 @@ sysLoadPacks :: HashTable String Shader -> Registry -> IO ()
 sysLoadPacks shaders registry = do
   (Just _packData) <- readIORef packData
   let packs = Reg.dataPacks _packData
-  cfor 0 ((>) <$> ArrayBuffer.size packs) (+1) $ \i -> do
+  cfor 0 (\i -> pure (i <) <*> ArrayBuffer.size packs) (+1) $ \i -> do
     pack <- ArrayBuffer.read packs i
     Reg.packInit pack registry windowInfo
 
@@ -205,7 +205,7 @@ sysUnloadPacks :: HashTable String Shader -> Registry -> IO ()
 sysUnloadPacks shaders registry = do
   (Just _packData) <- readIORef packData
   let packs = Reg.dataPacks _packData
-  cfor 0 ((>) <$> ArrayBuffer.size packs) (+1) $ \i -> do
+  cfor 0 (\i -> pure(i <) <*> ArrayBuffer.size packs) (+1) $ \i -> do
     pack <- ArrayBuffer.read packs i
     Reg.packDeinit pack registry windowInfo
 
@@ -318,7 +318,7 @@ keyCallback w key scancode action mods =
     (Just packData) <- readIORef packData
     let callbacks = dataKeyCallbacks packData
 
-    cfor (0 :: Int) ( (>) <$> ArrayBuffer.size callbacks) (+1) $ \i -> do
+    cfor 0 (\i -> pure(i <) <*> ArrayBuffer.size callbacks) (+1) $ \i -> do
       callback <- ArrayBuffer.read callbacks i
       callback w key scancode action mods --call all registred callbacks
 
@@ -329,7 +329,7 @@ mouseCallback w button action mods = do
   (Just packData) <- readIORef packData
   let callbacks = dataMouseCallbacks packData
 
-  cfor (0 :: Int) ( (>) <$> ArrayBuffer.size callbacks) (+1) $ \i -> do
+  cfor 0 (\i -> pure(i <) <*> ArrayBuffer.size callbacks) (+1) $ \i -> do
     callback <- ArrayBuffer.read callbacks i
     callback w button action mods --call all registred callbacks
 
@@ -347,11 +347,11 @@ testFunction :: IO ()
 testFunction = do
   let size = 15
   arr <- Ar.newArray (0, size - 1) 0 :: IO (Ar.IOArray Int Int)
-  cfor 0 ((>) <$> pure size) (+ 1) $ \i -> Ar.writeArray arr i (size - i)
+  cfor' 0 (< size) (+ 1) $ \i -> Ar.writeArray arr i (size - i)
   facSort arr
 
 
-  cfor 0 ((>) <$> pure size) (+ 1) $ \ i -> do
+  cfor' 0 (< size) (+ 1) $ \ i -> do
     el <- Ar.readArray arr i
     println $ show el
 

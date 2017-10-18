@@ -25,7 +25,7 @@ grow buf delta = do
   allocSize <- allocatedSize buf
   let newSize = allocSize + delta
   ar <- newArray_ (0, newSize) :: IO (IOArray Int a)
-  cfor 0 ( (>) <$> size buf) (+1) $ \i -> do
+  cfor 0 (\i -> pure (i <) <*> size buf) (+1) $ \i -> do
     t <- Memory.ArrayBuffer.read buf i
     writeArray ar i t
     pure ()
@@ -46,7 +46,7 @@ mapM_ :: (e -> IO a) -> ArrayBuffer Int e -> IO ()
 mapM_ fun buf = do
   len <- buf.>size
 
-  cfor 0 ((>) <$> buf.>size) (+1) $ \i -> do
+  cfor' 0 (< len) (+1) $ \i -> do
     element <- Memory.ArrayBuffer.read buf i
     fun element
 

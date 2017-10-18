@@ -60,14 +60,22 @@ for val pred step initial body
     | otherwise = pure initial
 
 --with IO condition
-cfor :: Int -> IO (Int -> Bool) -> (Int -> Int) -> (Int -> IO b ) -> IO () --imperative for loop, just like in C !
+cfor :: Int -> (Int -> IO Bool) -> (Int -> Int) -> (Int -> IO b ) -> IO () --imperative for loop, just like in C !
 cfor val pred step body = do
-    pr <- pred
-    if pr val then  do
+    continue <- pred val
+    if continue then  do
         body val
         cfor (step val) pred step body
     else pure ()
 
+
+--with pure condition
+cfor' :: Int -> (Int -> Bool) -> (Int -> Int) -> (Int -> IO b ) -> IO () --imperative for loop, just like in C !
+cfor' val pred step body = do
+    if pred val then  do
+        body val
+        cfor' (step val) pred step body
+    else pure ()
 
 while :: (a -> IO Bool) -> a -> (a -> IO a) -> IO () --functional while loop, same as functional for loop
 while predicate x func = do
@@ -107,8 +115,8 @@ removeDuplicates = Data.List.foldl (\seen x -> if x `elem` seen
 facSort :: IOArray Int Int -> IO ()
 facSort arr = do
   len <- (+ 1) . snd <$> getBounds arr
-  cfor 0 ( (<) <$> pure len ) (+ 1) $ \i ->
-    cfor (i + 1) ( (<) <$> pure len ) (+ 1) $ \j -> do
+  cfor' 0 (< len) (+ 1) $ \i ->
+    cfor' (i + 1) (< len) (+ 1) $ \j -> do
       this <- readArray arr i
       next <- readArray arr j
       if this > next
