@@ -98,7 +98,7 @@ mouseCallbackPtr = unsafePerformIO (newIORef nullFunPtr)-}
 
 --------------------------------------------------------------------------
 
-shadersDir = "resources" ++ [pathSeparator] ++ "shaders" ++ [pathSeparator]
+shadersDir = "assets" ++ [pathSeparator] ++ "shaders" ++ [pathSeparator]
 
 
 
@@ -109,6 +109,9 @@ initGL = do
 
   if glfwOk == c_GLFW_TRUE then do
     println "GLFW3 - done"
+    glfwWindowHint c_GLFW_CONTEXT_VERSION_MAJOR 3
+    glfwWindowHint c_GLFW_CONTEXT_VERSION_MINOR 3
+    glfwWindowHint c_GLFW_OPENGL_PROFILE c_GLFW_OPENGL_CORE_PROFILE
     w <- glfwCreateWindow Def.startingWidth Def.startingHeight name
     glfwMakeContextCurrent w
 
@@ -124,6 +127,9 @@ initGL = do
       let info = WindowInfo w Def.startingWidth Def.startingHeight
       writeIORef windowInfo info
       println "OpenGL initialized"
+
+      glVersion <- glGetString(c_GL_VERSION)
+      println $ "Using OpenGL: " ++ show glVersion
 
       return ()
     else

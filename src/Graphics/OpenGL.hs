@@ -59,8 +59,9 @@ c_GL_UNSIGNED_INT = 5125 :: Int
 c_GL_TRIANGLES = 4 :: Int
 c_GL_LINES = 1 :: Int
 c_GL_CURRENT_PROGRAM = 35725 :: Int
-
-
+c_GL_MAJOR_VERSION  = 0x821B :: Int
+c_GL_MINOR_VERSION = 0x821C :: Int
+c_GL_VERSION = 0x1F02 :: Int
 
 c_GLFW_KEY_SPACE              = 32 :: Int
 c_GLFW_KEY_APOSTROPHE         = 39 :: Int
@@ -112,8 +113,10 @@ c_GLFW_KEY_RIGHT_BRACKET      = 93 :: Int
 c_GLFW_KEY_GRAVE_ACCENT       = 96 :: Int
 c_GLFW_KEY_WORLD_1            = 161 :: Int
 c_GLFW_KEY_WORLD_2            = 162 :: Int
-
-
+c_GLFW_CONTEXT_VERSION_MAJOR  = 0x00022002 :: Int
+c_GLFW_CONTEXT_VERSION_MINOR  = 0x00022003 :: Int
+c_GLFW_OPENGL_PROFILE         = 0x00022008 :: Int
+c_GLFW_OPENGL_CORE_PROFILE    = 0x00032001 :: Int
 c_GLFW_KEY_ESCAPE             = 256 :: Int
 
 glfwInit :: IO Int
@@ -183,6 +186,12 @@ glfwMakeContextCurrent handle = do
 glfwWindowShouldClose :: Ptr () -> IO Int
 glfwWindowShouldClose handle = do
     fromIntegral <$> [C.exp|int{glfwWindowShouldClose( $(void* handle) )}|]
+
+glfwWindowHint :: Int -> Int -> IO ()
+glfwWindowHint i1 i2 = do
+    let c1 =  fromIntegral i1 :: CInt
+    let c2 = fromIntegral i2 :: CInt
+    [C.exp|void{glfwWindowHint( $(int c1),  $(int c2) )}|]
 
 glGetUniformLocation :: Int -> String -> IO Int
 glGetUniformLocation program name = do
@@ -296,6 +305,7 @@ glGetShaderiv shader mode result = do
     [C.exp|void{glGetShaderiv( $(int s), $(int m), $(int* result))}|]
 
 
+
 glGenVertexArrays :: IO Int
 glGenVertexArrays = do
     val <- malloc :: IO (Ptr CInt)
@@ -367,13 +377,18 @@ glGetShaderInfoLog shader = do
     let s = fromIntegral shader :: CInt
     let c = 512 :: CInt
     let allocated = (mallocBytes $ fromIntegral c) :: IO CString
+    len_ret <- malloc :: IO (Ptr CInt)
     str <- allocated
-    [C.exp|void{glGetShaderInfoLog( $(int s), $(int c), NULL, $(char* str))}|]
-    let !res = peekCString str
+    [C.exp|void{glGetShaderInfoLog( $(int s), $(int c), $(int* len_ret), $(char* str))}|]
+    result <- peekCString str
     free str
-    res
+    pure result
 
-
+glGetString :: Int -> IO String
+glGetString str = do
+    let s = fromIntegral str :: CInt
+    raw <- [C.exp|char*{glGetString( $(int s))}|]
+    peekCString raw
 
 glAttachShader :: Int -> Int -> IO ()
 glAttachShader program shader = do
