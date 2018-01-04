@@ -55,8 +55,8 @@ grow mem@(MemBlock msize mptr stored) newSize = do
   else do
     newPtr <- reallocBytes ptr ( sizeOf(undefined :: a)  * newSize)
 
-    mptr.>rw' ! newPtr
-    msize.>rw' ! newSize
+    mptr.>rw' $ newPtr
+    msize.>rw' $ newSize
 
     pure mem
 
@@ -72,13 +72,13 @@ add mem@(MemBlock msize mptr mactually) element = do
     pure ()
 
   (mem.>write) actually element
-  mactually.>rm' ! (+1)
+  mactually.>rm' $ (+1)
   pure mem
 
 foreach :: (Storable a) => MemBlock a -> (a -> IO ()) -> IO ()
 foreach mem func = do
   _stored <- mem.>stored.>rr'
   for 0 (< _stored) (+1) () $ \i _ -> do
-    elem <- mem.>Memory.MemBlock.read ! i
+    elem <- mem.>Memory.MemBlock.read $ i
     func elem
   pure ()

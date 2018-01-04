@@ -96,7 +96,7 @@ addTriangle mdat triangle color = do
   ip <- Mem.add ip (1 + vc)
   ip <- Mem.add ip (2 + vc)
 
-  dat.>vertexCount.>rm' ! (+3)
+  dat.>vertexCount.>rm' $ (+3)
 
   pure ()
 
@@ -126,7 +126,7 @@ addLine2 mdat line zLevel color = do
 
   ip <- Mem.add ip vc
   ip <- Mem.add ip (1 + vc)
-  dat.>vertexCount.>rm' ! (+2)
+  dat.>vertexCount.>rm' $ (+2)
 
   pure ()
 
@@ -181,7 +181,7 @@ renderVertFragDefault mode vertSize setAttribPointers shaderName = do
             glBindBuffer c_GL_ARRAY_BUFFER 0
             glBindVertexArray 0
 
-            dat.>constructed.>rw' ! True
+            dat.>constructed.>rw' $ True
             pure True
           else
             pure False
@@ -195,7 +195,7 @@ renderVertFragDefault mode vertSize setAttribPointers shaderName = do
           vao.>rr' >>= glDeleteVertexArrays
           vbo.>rr' >>= glDeleteBuffers
           ebo.>rr' >>= glDeleteBuffers
-          dat.>constructed.>rw' ! False
+          dat.>constructed.>rw' $ False
           pure True
         else
           pure False

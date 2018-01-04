@@ -2,8 +2,10 @@
 
 module Render.Renderer where
 
-import Registry(WindowInfo)
+import qualified WindowInfo
+import WindowInfo(WindowInfo)
 import qualified Registry as Reg
+import Registry
 import qualified Defaults as Def
 import Graphics.OpenGL
 import Common
@@ -13,20 +15,22 @@ import Graphics.Render.RenderVertFrag
 import Graphics.Shader.ShaderUtils(Shader)
 import qualified Graphics.Shader.ShaderUtils as SU
 import Data.Maybe
-import Registry(RenderTranformation(..), RenderLifetime(..))
+import Registry(RenderTransformation(..), RenderLifetime(..))
 import qualified Data.HashTable.IO as H
 import qualified Memory.ArrayBuffer as ArrayBuffer
+
+import Control.Lens hiding (element)
 
 sysDraw :: IORef WindowInfo -> HashTable String Shader -> IO ()
 sysDraw _windowInfo shaders = do
   windowInfo <- readIORef _windowInfo
 
   glClear c_GL_COLOR_BUFFER_BIT
-  glClearColor (Def.backGroundColor.>x) (Def.backGroundColor.>y) (Def.backGroundColor.>z) 1
+  glClearColor (x Def.backGroundColor) (y Def.backGroundColor) (z Def.backGroundColor) 1
 
   drawUI _windowInfo shaders
 
-  glfwSwapBuffers (windowInfo.>Reg.windowId)
+  glfwSwapBuffers (windowInfo^.WindowInfo.handle)
 
 
 drawUI :: IORef WindowInfo -> HashTable String Shader -> IO ()
@@ -36,31 +40,31 @@ drawUI _windowInfo shaders = do
   (Just onetime) <- readIORef Reg.lifetimeOneDrawRenderers
   ArrayBuffer.mapM_ (\val -> do -- == foreach do
     let render = fst val
-    name <- render.>shaderName
+    name <- shaderName render
     (Just shader) <- (H.lookup) shaders name
-    shader.>SU.enable
+    SU.enable shader
 
     let provider = snd val
-    if isJust (Reg.applyShaderData provider) then do
-      let (Just applySData) = Reg.applyShaderData provider
+    if isJust (provider^.applyShaderData) then do
+      let (Just applySData) = provider^.applyShaderData
       applySData shader windowInfo
     else
       pure ()
 
-    if isJust (Reg.applyPreRenderState provider) then do
-      let (Just applyPreState) = Reg.applyPreRenderState provider
+    if isJust (provider^.applyPreRenderState) then do
+      let (Just applyPreState) = provider^.applyPreRenderState
       applyPreState
     else
       pure ()
 
 
-    render.>construct
-    render.>draw
-    shader.>SU.disable
-    render.>deconstruct
+    construct render
+    draw render
+    SU.disable shader
+    deconstruct render
 
-    if isJust (Reg.applyPostRenderState provider) then do
-      let (Just applyPostState) = Reg.applyPostRenderState provider
+    if isJust (provider^.applyPostRenderState) then do
+      let (Just applyPostState) = provider^.applyPostRenderState
       applyPostState
     else
       pure ()
@@ -79,31 +83,31 @@ drawUI _windowInfo shaders = do
   --println $ show manual
   ArrayBuffer.mapM_ (\val -> do -- == foreach do
     let render = fst val
-    name <- render.>shaderName
+    name <- shaderName render
     (Just shader) <- (H.lookup) shaders name
-    shader.>SU.enable
+    SU.enable shader
 
     let provider = snd val
-    if isJust (Reg.applyShaderData provider) then do
-      let (Just applySData) = Reg.applyShaderData provider
+    if isJust (provider^.applyShaderData) then do
+      let (Just applySData) = provider^.applyShaderData
       applySData shader windowInfo
     else
       pure ()
 
-    if isJust (Reg.applyPreRenderState provider) then do
-      let (Just applyPreState) = Reg.applyPreRenderState provider
+    if isJust (provider^.applyPreRenderState) then do
+      let (Just applyPreState) = provider^.applyPreRenderState
       applyPreState
     else
       pure ()
 
 
     --render.>construct          construction is on user's side
-    render.>draw
-    shader.>SU.disable
+    draw render
+    SU.disable shader
     --render.>deconstruct        same for deconstruction
 
-    if isJust (Reg.applyPostRenderState provider) then do
-      let (Just applyPostState) = Reg.applyPostRenderState provider
+    if isJust (provider^.applyPostRenderState) then do
+      let (Just applyPostState) = provider^.applyPostRenderState
       applyPostState
     else
       pure ()

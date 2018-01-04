@@ -6,21 +6,12 @@ import Data.Array.IO
 import Data.IORef
 import Common
 
-_arrayBufferDefaultSize = 8 :: Int
-
-class (Num i) => DynamicArrayContainer a i e where --TODO convert back to regular functions
-  size :: a i e -> IO i
-  allocatedSize :: a i e -> IO i
-  array :: a i e -> IO (IOArray i e)
-  new :: i -> IO (a i e)
-  push :: a i e -> e -> IO (a i e)
-  read :: a i e -> i -> IO e
-  write :: a i e -> i -> e -> IO (a i e)
+_ArrayBufferDefaultSize = 8 :: Int
 
 --fully mutable record, c++ like (feature lacking) vector
-data ArrayBuffer i e = ArrayBuffer{marray :: IORef (IOArray i e), msize :: IORef i}
+data ArrayBuffer e = ArrayBuffer{marray :: IORef (IOArray Int e), msize :: IORef Int}
 
-grow :: ArrayBuffer Int e -> Int -> IO (ArrayBuffer Int e)
+grow :: ArrayBuffer e -> Int -> IO (ArrayBuffer e)
 grow buf delta = do
   allocSize <- allocatedSize buf
   let newSize = allocSize + delta
@@ -32,7 +23,7 @@ grow buf delta = do
   writeIORef (marray buf) ar
   pure buf
 
-growIfNecessary :: ArrayBuffer Int e -> Int -> IO ()
+growIfNecessary :: ArrayBuffer e -> Int -> IO ()
 growIfNecessary buf newSize = do
   allocSize <- allocatedSize buf
   if allocSize < newSize then do
@@ -42,7 +33,7 @@ growIfNecessary buf newSize = do
     pure ()
 
 
-mapM_ :: (e -> IO a) -> ArrayBuffer Int e -> IO ()
+mapM_ :: (e -> IO a) -> ArrayBuffer e -> IO ()
 mapM_ fun buf = do
   len <- buf.>size
 
@@ -52,25 +43,28 @@ mapM_ fun buf = do
 
 
 --does not free up the elements (gc wont do it), only set the size to 0
-clear :: (Num i) => ArrayBuffer i e -> IO ()
+clear :: ArrayBuffer e -> IO ()
 clear buf = writeIORef (buf.>msize) 0
 
 
-instance DynamicArrayContainer ArrayBuffer Int a where
-  allocatedSize buf = snd <$> (array buf >>= getBounds)
+allocatedSize :: ArrayBuffer e -> IO Int
+allocatedSize buf = snd <$> (array buf >>= getBounds)
 
-  size buf = readIORef (msize buf)
+size :: ArrayBuffer e -> IO Int
+size buf = readIORef (msize buf)
 
-  array buf = readIORef (marray buf)
+array :: ArrayBuffer e -> IO (IOArray Int e)
+array buf = readIORef (marray buf)
 
-
-  new size = do
+new :: Int -> IO (ArrayBuffer e)
+new size = do
     ar <- newArray_ (0, size) :: IO (IOArray Int a)
     zero <- newIORef 0
     array <- newIORef ar
     pure $ ArrayBuffer array zero
 
-  push buffer el = do
+push :: ArrayBuffer e -> e -> IO (ArrayBuffer e)
+push buffer el = do
     alloc <- allocatedSize buffer
     size <- size buffer
 
@@ -81,11 +75,13 @@ instance DynamicArrayContainer ArrayBuffer Int a where
     writeIORef (msize buffer) (size+1)
     pure buffer
 
-  read buf index = do
+read :: ArrayBuffer e -> Int -> IO e
+read buf index = do
     ar <- array buf
     readArray ar index
 
-  write buf i el = do
+write :: ArrayBuffer e -> Int -> e -> IO (ArrayBuffer e)
+write buf i el = do
     ar <- array buf
     writeArray ar i el
     pure buf

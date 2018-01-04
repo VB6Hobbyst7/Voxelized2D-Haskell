@@ -39,7 +39,9 @@ import qualified Defaults as Def
 import qualified Render.Renderer as Renderer
 import Control.Monad.Primitive
 import qualified Registry as Reg
-import Registry (Registry(..), Pack(..), WindowInfo(..), PackData(..))
+import Registry (Registry(..), Pack(..), PackData(..))
+import WindowInfo(WindowInfo(..))
+import qualified WindowInfo
 import qualified Pack.CorePack as CorePack
 import qualified Memory.ArrayBuffer as ArrayBuffer
 import Memory.ArrayBuffer (ArrayBuffer)
@@ -48,6 +50,8 @@ import Data.Global
 import Data.Singletons.TypeLits
 import Math.Collision
 import Math.Geometry.Line2
+
+import Control.Lens hiding (element, (.>))
 
 name = "Haskell-Voxelized2D"
 
@@ -128,8 +132,7 @@ initGL = do
       writeIORef windowInfo info
       println "OpenGL initialized"
 
-      glVersion <- glGetString(c_GL_VERSION)
-      println $ "Using OpenGL: " ++ show glVersion
+      println <$> glGetString(c_GL_VERSION)
 
       return ()
     else
@@ -153,7 +156,7 @@ loadShaders = do
 
   let len = Prelude.length names
   _ <- for 0 (<len) (+1) paired $ \ _ ((f,s) : xs) -> do
-    let name = f |> takeFileName |> dropExtension
+    let name = dropExtension $ takeFileName f
     i <- loadShader f s
     H.insert res name (Shader i)
     pure xs
@@ -165,10 +168,10 @@ loadShaders = do
 
 initRegistry :: IO Registry
 initRegistry = do
-  packs <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int Pack)
-  keyCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int GLFWkeyfun)
-  mouseCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int GLFWmousebuttonfun)
-  updateCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer Int (IORef WindowInfo -> IO () ) )
+  packs <- ArrayBuffer.new 8 :: IO (ArrayBuffer Pack)
+  keyCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer GLFWkeyfun)
+  mouseCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer GLFWmousebuttonfun)
+  updateCallbacks <- ArrayBuffer.new 8 :: IO (ArrayBuffer (IORef WindowInfo -> IO () ) )
   let
     addPack :: Pack -> IO ()
     addPack e = do
@@ -202,18 +205,18 @@ initRegistry = do
 sysLoadPacks :: HashTable String Shader -> Registry -> IO ()
 sysLoadPacks shaders registry = do
   (Just _packData) <- readIORef packData
-  let packs = Reg.dataPacks _packData
+  let packs = _packData^.Reg.packs
   cfor 0 (\i -> pure (i <) <*> ArrayBuffer.size packs) (+1) $ \i -> do
     pack <- ArrayBuffer.read packs i
-    Reg.packInit pack registry windowInfo
+    (view Reg.init pack) registry windowInfo
 
 sysUnloadPacks :: HashTable String Shader -> Registry -> IO ()
 sysUnloadPacks shaders registry = do
   (Just _packData) <- readIORef packData
-  let packs = Reg.dataPacks _packData
+  let packs = _packData^.Reg.packs
   cfor 0 (\i -> pure(i <) <*> ArrayBuffer.size packs) (+1) $ \i -> do
     pack <- ArrayBuffer.read packs i
-    Reg.packDeinit pack registry windowInfo
+    (view Reg.deinit pack) registry windowInfo
 
 sysInit :: IO (HashTable String Shader, Registry)
 sysInit = do
@@ -226,7 +229,7 @@ sysInit = do
 sysUpdate :: HashTable String Shader -> Registry -> IO ()
 sysUpdate shaders registry = do
   (Just _packData) <- readIORef packData
-  ArrayBuffer.mapM_ (\fun -> fun windowInfo) (_packData.>dataUpdateCallbacks)
+  ArrayBuffer.mapM_ (\fun -> fun windowInfo) (_packData^.Reg.updateCallbacks)
 
 sysRun :: HashTable String Shader -> Registry -> IO ()
 sysRun shaders registry = do
@@ -234,7 +237,7 @@ sysRun shaders registry = do
   let shouldNotClose w = (== c_GLFW_FALSE) <$> glfwWindowShouldClose w
 
   _win <- readIORef windowInfo
-  while shouldNotClose (_win.>Reg.windowId) $ \w -> do
+  while shouldNotClose (_win^.WindowInfo.handle) $ \w -> do
 
        sysUpdate shaders registry
 
@@ -287,7 +290,7 @@ runVoxelized = do
   (shaders,registry) <- sysInit
 
   --add core pack
-  Reg.addPack registry CorePack.pack
+  (view Reg.addPack registry) CorePack.pack
 
   sysLoadPacks shaders registry
 
@@ -322,7 +325,7 @@ keyCallback w key scancode action mods =
 
   else do
     (Just packData) <- readIORef packData
-    let callbacks = dataKeyCallbacks packData
+    let callbacks = packData^.Reg.keyCallbacks
 
     cfor 0 (\i -> pure(i <) <*> ArrayBuffer.size callbacks) (+1) $ \i -> do
       callback <- ArrayBuffer.read callbacks i
@@ -333,7 +336,7 @@ keyCallback w key scancode action mods =
 mouseCallback :: GLFWmousebuttonfun
 mouseCallback w button action mods = do
   (Just packData) <- readIORef packData
-  let callbacks = dataMouseCallbacks packData
+  let callbacks = packData^.Reg.mouseCallbacks
 
   cfor 0 (\i -> pure(i <) <*> ArrayBuffer.size callbacks) (+1) $ \i -> do
     callback <- ArrayBuffer.read callbacks i

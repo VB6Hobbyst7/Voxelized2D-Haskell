@@ -6,8 +6,10 @@ import Prelude hiding (init, lines)
 import Graphics.OpenGL
 
 import qualified Registry
+import Registry(Registry(..))
 import Common
-import Registry(WindowInfo(..))
+import qualified WindowInfo
+import WindowInfo(WindowInfo(..))
 
 import Math.Geometry.Triangle
 import Math.Geometry.Triangle2
@@ -30,6 +32,8 @@ import Data.Bits
 import qualified Math.Geometry.SShape2 as Solid
 import Math.Geometry.SShape2(DenFun)
 import Data.Singletons.TypeLits
+
+import Control.Lens hiding (element, (.>))
 
 name = "CorePack"
 version = "0.0.1"
@@ -65,7 +69,7 @@ constSign a b
   | a > 0 = b > 0
   | otherwise = b <= 0
 
-calcQEF :: Vec2 Float -> ArrayBuffer Int (Line2 Float) -> IO Float
+calcQEF :: Vec2 Float -> ArrayBuffer (Line2 Float) -> IO Float
 calcQEF point lines = do
   qef <- newIORef 0 :: IO (IORef Float)
   ArrayBuffer.mapM_ (\ line -> do
@@ -74,7 +78,7 @@ calcQEF point lines = do
     ) lines
   readIORef qef
 
-sampleQEF :: Square2 Float -> Int -> ArrayBuffer Int (Line2 Float) -> IO (Vec2 Float)
+sampleQEF :: Square2 Float -> Int -> ArrayBuffer (Line2 Float) -> IO (Vec2 Float)
 sampleQEF square n lines = do
   let ext = vec2 (square.>extent) (square.>extent)
   let min = (square.>center) |-| ext
@@ -146,7 +150,7 @@ extForNormal :: Float -> Float
 extForNormal !blockSize = blockSize / 100 --TODO why so ?
 
 --returns (featureVertex, intersections, extraPoints)
-makeVertex :: VoxelGrid2 Float -> ArrayBuffer Int (Triangle2 Float) -> Int -> Int -> DenFun Float -> Int -> IOArray Int (Maybe (Vec2 Float)) -> ArrayBuffer Int (Vec2 Float) -> ArrayBuffer Int (Vec2 Float) -> IO ( Maybe (Vec2 Float))
+makeVertex :: VoxelGrid2 Float -> ArrayBuffer (Triangle2 Float) -> Int -> Int -> DenFun Float -> Int -> IOArray Int (Maybe (Vec2 Float)) -> ArrayBuffer (Vec2 Float) -> ArrayBuffer (Vec2 Float) -> IO ( Maybe (Vec2 Float))
 makeVertex vg tr x y f accuracy features outIntersections outExtra = do
   p0 <- (vg.>VG.get) x y
   p1 <- (vg.>VG.get) (x+1) y
@@ -170,7 +174,7 @@ makeVertex vg tr x y f accuracy features outIntersections outExtra = do
 
   _sit <- readIORef sit
   if _sit > 0 then do
-    tangents <- ArrayBuffer.new 4 :: IO (ArrayBuffer Int (Line2 Float))
+    tangents <- ArrayBuffer.new 4 :: IO (ArrayBuffer (Line2 Float))
 
     let
       worker :: Int -> Vec2 Float -> Vec2 Float -> Float -> Float -> IO ()
@@ -214,21 +218,21 @@ makeVertex vg tr x y f accuracy features outIntersections outExtra = do
 
 
 data ContourData = ContourData{
-  lines :: ArrayBuffer Int (Line2 Float),
-  triangles :: ArrayBuffer Int (Triangle2 Float),
+  lines :: ArrayBuffer (Line2 Float),
+  triangles :: ArrayBuffer (Triangle2 Float),
   features :: IOArray Int (Maybe (Vec2 Float)),
-  intersections :: IOArray Int (Maybe (ArrayBuffer Int (Vec2 Float))),
-  extras :: IOArray Int (Maybe (ArrayBuffer Int (Vec2 Float)))
+  intersections :: IOArray Int (Maybe (ArrayBuffer (Vec2 Float))),
+  extras :: IOArray Int (Maybe (ArrayBuffer (Vec2 Float)))
 }
 
 makeContour :: VoxelGrid2 Float -> DenFun Float -> Int -> IO ContourData
 makeContour vg f accuracy = do
-  res1 <- ArrayBuffer.new 128 :: IO (ArrayBuffer Int (Line2 Float))
-  res2 <- ArrayBuffer.new 128 :: IO (ArrayBuffer Int (Triangle2 Float))
+  res1 <- ArrayBuffer.new 128 :: IO (ArrayBuffer (Line2 Float))
+  res2 <- ArrayBuffer.new 128 :: IO (ArrayBuffer (Triangle2 Float))
 
   features <- newIOArray (0,vg.>sizeX * vg.>sizeY - 1) Nothing :: IO (IOArray Int (Maybe (Vec2 Float)))
-  intersections <- newIOArray (0, vg.>sizeX * vg.>sizeY - 1) Nothing :: IO (IOArray Int (Maybe (ArrayBuffer Int (Vec2 Float))) )
-  extra <- newIOArray (0, vg.>sizeX * vg.>sizeY - 1) Nothing :: IO (IOArray Int (Maybe (ArrayBuffer Int (Vec2 Float))) )
+  intersections <- newIOArray (0, vg.>sizeX * vg.>sizeY - 1) Nothing :: IO (IOArray Int (Maybe (ArrayBuffer (Vec2 Float))) )
+  extra <- newIOArray (0, vg.>sizeX * vg.>sizeY - 1) Nothing :: IO (IOArray Int (Maybe (ArrayBuffer (Vec2 Float))) )
 
   let
     cachedMake :: Int -> Int -> IO (Maybe (Vec2 Float))
@@ -238,8 +242,8 @@ makeContour vg f accuracy = do
       case possible of
         (Just x) -> pure $ Just x
         Nothing -> do
-          _new1 <- ArrayBuffer.new 4 :: IO (ArrayBuffer Int (Vec2 Float))
-          _new2 <- ArrayBuffer.new 4 :: IO (ArrayBuffer Int (Vec2 Float))
+          _new1 <- ArrayBuffer.new 4 :: IO (ArrayBuffer (Vec2 Float))
+          _new2 <- ArrayBuffer.new 4 :: IO (ArrayBuffer (Vec2 Float))
           (intersections.>writeIOArray) t (Just _new1)
           (intersections.>writeIOArray) t (Just _new2)
 
@@ -337,7 +341,7 @@ fillInGrid vg f =
 defaultProvider mwin = do
   win <- mwin.>rr'
   let height = 16 :: Float
-  let aspect = fromIntegral (win.>windowWidth) / fromIntegral (win.>windowHeight)
+  let aspect = fromIntegral (win^.WindowInfo.width) / fromIntegral (win^.WindowInfo.height)
   let width = height * aspect
   pure $ Just $ Registry.RenderDataProvider (Just $ \ shader _ -> do
       (shader.>SU.setMat4) "V" (identity (SNat @4)) False
@@ -350,17 +354,17 @@ identityProvider =
       (shader.>SU.setMat4) "P" (identity (SNat @4)) False
     ) Nothing Nothing
 
-
+init :: Registry -> IORef WindowInfo -> IO ()
 init reg mwin = do
 
   win <- readIORef mwin
 
-  let width = fromIntegral $ win.>windowWidth :: Float
-  let height = fromIntegral $ win.>windowHeight :: Float
+  let width = fromIntegral $ win^.WindowInfo.width :: Float
+  let height = fromIntegral $ win^.WindowInfo.height :: Float
 
-  Registry.addKeyCallback reg keyCallback
-  Registry.addMouseCallback reg mouseCallback
-  Registry.addUpdateCallback reg updateCallback
+  (view Registry.addKeyCallback reg) keyCallback
+  (view Registry.addMouseCallback reg) mouseCallback
+  (view Registry.addUpdateCallback reg) updateCallback
 
   grid <- VG.mkGrid _block_size _chunk_size _chunk_size
 
@@ -392,7 +396,7 @@ init reg mwin = do
     ) (dat.>lines)
 
 
-  linesRenderer.>rw' ! Just _linesRenderer
+  linesRenderer.>rw' $ Just _linesRenderer
 
   let triangle = Triangle (vec3  0 0 0) (vec3 1 0 0) (vec3 0 1 0)
   (dat, _renderer) <- RVF.renderVertFragDefault (pure c_GL_TRIANGLES) RVF.vertexSizeColor setAttributePointersColor (pure "color")
@@ -405,7 +409,7 @@ init reg mwin = do
   --(Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _renderer identityProvider
 
   
-  (Registry.renderer.>Registry.push) Registry.RenderLifetimeManual Registry.RenderTransformationNone _linesRenderer =<< defaultProvider mwin
+  Registry.push Registry.renderer Registry.RenderLifetimeManual Registry.RenderTransformationNone _linesRenderer =<< defaultProvider mwin
 
 
   
@@ -413,9 +417,9 @@ init reg mwin = do
 
 deinit reg win = do
 
-  (renderer.>rr')      >>= (\(Just x) -> do x.>RVF.deconstruct;x.>RVF.free)
-  (linesRenderer.>rr') >>= (\(Just x) -> do x.>RVF.deconstruct;x.>RVF.free)
+  rr' renderer      >>= (\(Just x) -> do RVF.deconstruct x;RVF.free x)
+  rr' linesRenderer >>= (\(Just x) -> do RVF.deconstruct x;RVF.free x)
 
   println "core pack deinit !"
 
-pack = Registry.Pack name version init deinit
+pack = Registry.Pack{_name = name, _version = version, _init =  init, _deinit = deinit}

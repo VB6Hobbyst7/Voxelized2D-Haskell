@@ -1,4 +1,5 @@
 {-# LANGUAGE Strict #-}
+{-# LANGUAGE TemplateHaskell, PostfixOperators #-}
 
 module Common where
 import qualified Data.HashTable.IO as H
@@ -7,8 +8,13 @@ import Timer
 import Data.List
 import Data.Array.IO
 import Data.IORef
+import InlineDo
+
 
 type HashTable k v = H.BasicHashTable k v --hashtable from hashtables
+
+
+
 
 infixl 0 |>
 (|>) :: a -> (a -> b) -> b
@@ -27,8 +33,8 @@ rn' = newIORef
 {-# INLINE rm' #-}
 {-# INLINE rn' #-}
 
-println :: String -> IO ()
-println = putStrLn
+println :: (Show a) => a -> IO ()
+println = putStrLn . show
 
 int :: Int -> Int
 int a = a
@@ -42,13 +48,14 @@ infixl 9 .>
 infixl 9 # --flipped (.)
 (#) :: (a -> b) -> (b -> c) -> (a -> c)
 (#) f1 f2 = f2 . f1
-
-infixl 9 ! --just another function application :)
-(!) :: (a -> b) -> a -> b
-(!) f = f
-
 {-# INLINE (#) #-}
-{-# INLINE (!) #-}
+
+do_ [d|
+    testFunc111 :: IO Int
+    testFunc111 = do
+        let x = pure 0
+        pure $ _do x
+    |]
 
 
 --experimental
@@ -98,7 +105,6 @@ timed howToRender op = do
       println $ howToRender (t2 - t1)
 
       pure res
-
 
 swap :: IOArray Int a -> Int -> Int -> IO ()
 swap arr i j = do

@@ -104,6 +104,11 @@ class (UVec a) => AlgVec a where
   y :: (n ~ (m :+ 2)) => Vec n a -> a
   z :: (n ~ (m :+ 3)) => Vec n a -> a
 
+  vec2 :: (AlgVec a) => a -> a -> Vec 2 a
+  vec3 :: (AlgVec a) => a -> a -> a -> Vec 3 a
+  vec4 :: (AlgVec a) => a -> a -> a -> a -> Vec 4 a
+
+
 
 instance AlgVec Float where
 
@@ -145,7 +150,13 @@ instance AlgVec Float where
   x (VConsFloat a _) = a
   y (VConsFloat _ (VConsFloat b _)) = b
   z (VConsFloat _ (VConsFloat _ (VConsFloat c _))) = c
-        
+
+  vec2 a b = VConsFloat a (VConsFloat b VNilFloat)
+
+  vec3 a b c = VConsFloat a (VConsFloat b (VConsFloat c VNilFloat))
+
+  vec4 a b c d = VConsFloat a (VConsFloat b (VConsFloat c (VConsFloat d VNilFloat)))
+
 
 type Vec2 a = Vec 2 a
 type Vec3 a = Vec 3 a
@@ -171,16 +182,6 @@ vpforeach f v b =
         r <- f a b
         vpforeach f as r
       Right Refl -> pure b
-
-
-vec2 :: (UVec a) => a -> a -> Vec 2 a
-vec2 a b = vcons a (vcons b vnil)
-
-vec3 :: (UVec a) => a -> a -> a -> Vec 3 a
-vec3 a b c = vcons a (vcons b (vcons c vnil))
-
-vec4 :: (UVec a) => a -> a -> a -> a -> Vec 4 a
-vec4 a b c d = vcons a (vcons b (vcons c (vcons d vnil)))
 
 
 
